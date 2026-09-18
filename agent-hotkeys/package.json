@@ -1,0 +1,13 @@
+{
+  "name": "herdr-agent-hotkeys",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Every agent gets its own hotkey (Alt+1 ... Alt+0, Alt+Q ...) when it starts, shown next to it in the sidebar; press it to jump to that agent.",
+  "license": "MIT",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "test": "node --test test/hotkeys.test.js",
+    "manifest": "node scripts/gen-manifest.js",
+    "keys": "node bin/keys.js"
+  }
+}
