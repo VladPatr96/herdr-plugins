@@ -50,9 +50,28 @@ Herdr's config file is `%APPDATA%\herdr\config.toml` on Windows and
 | `$hotkey` | just the key, e.g. `Alt+1` |
 | `$hotkey_line` | agent name and key, padded so the key sits at the right edge |
 
-To line the keys up under the `grouped` label, give the sidebar a fixed width
-(Herdr otherwise resizes it to fit workspace names) and use `$hotkey_line`
-as the agent's second row:
+**With right-aligned tokens** (a Herdr build that has `align` for sidebar
+tokens, see below), put `$hotkey` at the right edge of the agent's row. The
+key stays under `grouped` at any sidebar width, moves one column left when
+the agent list shows a scrollbar, and can have its own color:
+
+```toml
+[ui.sidebar.agents]
+rows = [["state_icon", "machine", "workspace", "tab"], ["agent", { token = "$hotkey", align = "right", fg = "#f9e2af", bold = true }]]
+```
+
+`align` is not in any released Herdr yet, up to and including 0.9.1. It
+lives in the `sidebar-token-align` branch of
+[VladPatr96/herdr](https://github.com/VladPatr96/herdr/tree/sidebar-token-align),
+which is Herdr 0.9.1 plus this option. A Herdr release without `align` fails
+to parse a config that uses it and falls back to defaults for everything,
+key bindings included (`herdr config check` shows the error). Use the padded
+variant below on those versions.
+
+**Without right-aligned tokens** (Herdr 0.9.1 and older), line the keys up
+under the `grouped` label by giving the sidebar a fixed width (Herdr
+otherwise resizes it to fit workspace names) and using `$hotkey_line` as the
+agent's second row:
 
 ```toml
 [ui]
@@ -103,13 +122,13 @@ description = "agent hotkey Alt+1"
 
 ## Limits
 
-- The right-edge alignment is padding, not real alignment: Herdr 0.9.1 has
-  no alignment option for sidebar tokens. It is exact only with a fixed
-  sidebar width. When the agent list needs a scrollbar, the scrollbar takes
-  one column and the last character of the key is cut off. Dragging the
-  sidebar edge also breaks the alignment until the width is fixed again.
-- Name and key share one style in `$hotkey_line`, because Herdr styles a
-  token as a whole.
+- Without `align` (Herdr 0.9.1 and older), `$hotkey_line` fakes the right
+  edge with padding. It is exact only with a fixed sidebar width. When the
+  agent list needs a scrollbar, the scrollbar takes one column and the last
+  character of the key is cut off. Dragging the sidebar edge also breaks the
+  alignment until the width is fixed again. Name and key share one style,
+  because Herdr styles a token as a whole. The `align = "right"` variant has
+  none of these limits.
 - More than 34 agents at once: the extra ones get no key until one frees up.
 - `Alt+…` keys depend on the terminal passing them through. If one does
   nothing, check that your terminal does not bind it itself.
