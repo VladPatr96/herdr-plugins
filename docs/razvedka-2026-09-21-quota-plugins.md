@@ -34,12 +34,14 @@ gist: Плагины квот для herdr есть (пять штук), но в
 
 | Провайдер | Источник | Ссылка |
 |---|---|---|
-| Claude Code | statusLine: на stdin приходит JSON с `rate_limits.five_hour` / `seven_day` (`used_percentage`, `resets_at`) | [claude.rs#L33](https://github.com/levi-qiao/herdr-agent-quota/blob/main/src/providers/claude.rs#L33) |
+| Claude Code | statusLine: на stdin приходит JSON с `rate_limits.five_hour` / `seven_day` (`used_percentage`, `resets_at`). Есть и прямой путь — `GET https://api.anthropic.com/api/oauth/usage` с токеном `claudeAiOauth.accessToken` из `~/.claude/.credentials.json`, заголовки `anthropic-beta: oauth-2025-04-20` и UA `claude-cli/<версия> (external, cli)`, но на этом аккаунте он отвечает `429` при нескольких открытых сессиях (проверено 2026-09-21 тремя вариантами заголовков), поэтому основной источник — statusLine | [claude.rs#L33](https://github.com/levi-qiao/herdr-agent-quota/blob/main/src/providers/claude.rs#L33), [clauth src/usage/fetch.rs](https://github.com/uwuclxdy/clauth/blob/main/src/usage/fetch.rs) |
 | agy / Antigravity | statusLine: объект `quota`, два недельных пула — нативные Gemini-модели и сторонние; включается командой `/statusline` внутри `agy` | [agy.rs#L77](https://github.com/levi-qiao/herdr-agent-quota/blob/main/src/providers/agy.rs#L77), [README herdr-agent-usage](https://github.com/senna-lang/herdr-agent-usage#supported-agents) |
 | Codex | `codex app-server --stdio`, JSON-RPC, ответ содержит `rateLimits` (окна 5h и 7d); учётка — `auth.json` в `CODEX_HOME` | [codex.rs#L159](https://github.com/levi-qiao/herdr-agent-quota/blob/main/src/providers/codex.rs#L159) |
 | Grok | `GET https://cli-chat-proxy.grok.com/v1/billing?format=credits` с учёткой из `~/.grok/auth.json` (недокументированный прокси CLI, не публичный API) | [grok.rs#L16](https://github.com/levi-qiao/herdr-agent-quota/blob/main/src/providers/grok.rs#L16) |
 | OpenCode Go | `GET https://opencode.ai/zen/go/v1/usage` с учёткой Go; подписка не хранит расход на диске | [opencode_go.rs#L24](https://github.com/levi-qiao/herdr-agent-quota/blob/main/src/providers/opencode_go.rs#L24), [README herdr-agent-usage](https://github.com/senna-lang/herdr-agent-usage#opencode-go-official-usage) |
 | DeepSeek API | `GET https://api.deepseek.com/user/balance`, заголовок `Authorization: Bearer <ключ>` | [DeepSeek API docs](https://api-docs.deepseek.com/api/get-user-balance) |
+
+Все источники, кроме statusLine agy, проверены вживую на этой машине 2026-09-21: DeepSeek, OpenCode Go, Grok и Codex ответили с первого запроса, Claude — через statusLine (прямой эндпоинт дал `429`).
 
 На этой машине учётки всех шести на месте: `~/.claude/.credentials.json`, `~/.codex/auth.json`, `~/.grok/auth.json` (обновлён сегодня), `~/.local/share/opencode/auth.json`, `agy` в `%LOCALAPPDATA%\agy\bin`. Ключ DeepSeek не искал.
 
