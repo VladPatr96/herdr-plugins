@@ -58,7 +58,9 @@ herdr plugin action invoke refresh --plugin vladpatr96.quota-board
 Herdr's config file is `%APPDATA%\herdr\config.toml` on Windows and
 `~/.config/herdr/config.toml` elsewhere (or `$HERDR_CONFIG_PATH`).
 
-A key that opens the window:
+Keys that open the board. There are two ways to see it — an overlay that
+covers the active pane while you look, and a split that stays open next to the
+agents:
 
 ```toml
 [[keys.command]]
@@ -66,10 +68,22 @@ key = "alt+shift+q"
 type = "plugin_action"
 command = "vladpatr96.quota-board.open"
 description = "AI quota board"
+
+[[keys.command]]
+key = "alt+shift+s"
+type = "plugin_action"
+command = "vladpatr96.quota-board.open-side"
+description = "AI quota board in a side pane"
 ```
 
-Reload with `herdr server reload-config`. The window opens as an overlay over
-the active pane and gives the focus back when you close it with `q`.
+Reload with `herdr server reload-config`.
+
+- `open` is an overlay: it zooms over the active pane and gives the focus back
+  when you close it with `q`.
+- `open-side` splits the current pane and puts the board to the right, where
+  the agents are. It is an ordinary Herdr pane, so it stays until you close it,
+  and pressing the key again focuses the board that is already open instead of
+  splitting another one.
 
 ## Where the numbers come from
 
