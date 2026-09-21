@@ -69,8 +69,25 @@ function parseArgs(argv) {
 
 // Куда положить агента. Без явного `--workspace` новая вкладка уходит в тот
 // воркспейс, который herdr сочтёт текущим, а это не обязательно тот, где сидит
-// позвавший: человек не найдёт своего агента. Поэтому спрашиваем herdr, где
-// пейн с этим рабочим каталогом, и кладём туда же.
+// позвавший: человек не найдёт своего агента.
+//
+// Достовернее всего — окружение: herdr задаёт `HERDR_WORKSPACE_ID` в оболочке
+// каждого своего пейна, а скилл вызывает нас как раз из сессии, которая в
+// таком пейне и живёт. Каталог задачи при этом может быть чужим (`--cwd` на
+// другой проект), и агент всё равно должен встать рядом с позвавшим.
+function callerWorkspace() {
+  if (process.env.HERDR_WORKSPACE_ID) return process.env.HERDR_WORKSPACE_ID;
+  const paneId = process.env.HERDR_PANE_ID;
+  if (!paneId) return null;
+  try {
+    return herdr(['pane', 'get', paneId])?.result?.pane?.workspace_id || null;
+  } catch {
+    return null;
+  }
+}
+
+// Запасной путь — по рабочему каталогу: он годится, когда запуск пришёл не из
+// пейна herdr (сессия в стороннем терминале, скрипт по расписанию).
 function workspaceFor(cwd) {
   if (!cwd) return null;
   const target = path.resolve(cwd).replace(/[\\/]+$/, '').toLowerCase();
@@ -141,6 +158,10 @@ function paneShows(paneId, marker) {
 //   2. наш текст на экране — он в композиторе и ждёт ввода: жмём Enter;
 //   3. текста нет — он потерян при перерисовке: шлём снова.
 //
+// Порядок ступенек — часть защиты, а не вкусовщина: Enter жмётся только после
+// того, как ожидание не увидело и `blocked`. Переставьте их — и Enter однажды
+// ответит «да» на вопрос о разрешении, который агент задал человеку.
+//
 // Слать заново, не посмотрев, нельзя: текст, который агент держит в очереди
 // (так ведёт себя codex на холодном старте), придёт задачей дважды.
 const ATTEMPTS = 3;
@@ -209,7 +230,7 @@ function launch(args) {
   // 1. Вкладка. `--no-focus` по умолчанию: человек ставит задачу из своей
   // сессии и остаётся в ней, агент ждёт его в сайдбаре.
   const tabArgs = ['tab', 'create', '--cwd', cwd, '--label', title.slice(0, 40)];
-  const workspace = args.workspace || workspaceFor(cwd);
+  const workspace = args.workspace || callerWorkspace() || workspaceFor(cwd);
   if (workspace) tabArgs.push('--workspace', workspace);
   tabArgs.push(args.focus ? '--focus' : '--no-focus');
   const created = herdr(tabArgs)?.result;

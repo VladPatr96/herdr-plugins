@@ -20,7 +20,6 @@ const {
   loadRegistry,
   saveRegistry,
   readTask,
-  taskFile,
 } = require('../lib/runtime');
 
 function sync() {
@@ -57,8 +56,8 @@ function sync() {
     const kept = { ...entries };
     for (const paneId of forget) {
       delete kept[paneId];
-      // Файл задачи с планом переживает пейн: по нему видно, чем кончилось.
-      // Удалять его здесь нечего, чистит `bin/forget.js`.
+      // Файл задачи с планом переживает пейн нарочно: по нему видно, чем
+      // кончилось. Из реестра запись уходит, файл остаётся.
     }
     saveRegistry(kept, dir);
   }
@@ -117,4 +116,4 @@ try {
   process.exitCode = 1;
 }
 
-module.exports = { sync, taskFile };
+module.exports = { sync };
