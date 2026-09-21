@@ -1,0 +1,58 @@
+id = "vladpatr96.quota-board"
+name = "Quota Board"
+version = "0.1.0"
+min_herdr_version = "0.9.1"
+description = "Subscription and API quota for Claude Code, Codex, agy, Grok, OpenCode Go and the DeepSeek API in one Herdr window, plus a remaining-quota token in the sidebar."
+platforms = ["linux", "macos", "windows"]
+
+# The window itself. Overlay keeps it transient: it zooms over the active pane
+# and gives focus back when it closes.
+[[panes]]
+id = "board"
+title = "AI quota"
+placement = "overlay"
+command = ["node", "bin/board.js"]
+
+[[actions]]
+id = "open"
+title = "Quota Board: open"
+contexts = ["workspace", "global"]
+command = ["node", "bin/open.js"]
+
+[[actions]]
+id = "refresh"
+title = "Quota Board: refresh quota"
+contexts = ["workspace", "global"]
+command = ["node", "bin/refresh.js"]
+
+[[actions]]
+id = "install-statusline"
+title = "Quota Board: install the Claude statusLine bridge"
+contexts = ["workspace", "global"]
+command = ["node", "bin/install-statusline.js"]
+
+[[actions]]
+id = "remove-statusline"
+title = "Quota Board: remove the Claude statusLine bridge"
+contexts = ["workspace", "global"]
+command = ["node", "bin/install-statusline.js", "--uninstall"]
+
+# Pane metadata is dropped when the server restarts, so paint the tokens again.
+[[startup]]
+command = ["node", "bin/sync.js"]
+
+[[events]]
+on = "pane.agent_detected"
+command = ["node", "bin/sync.js"]
+
+[[events]]
+on = "pane.agent_status_changed"
+command = ["node", "bin/sync.js"]
+
+[[events]]
+on = "pane.exited"
+command = ["node", "bin/sync.js"]
+
+[[events]]
+on = "pane.closed"
+command = ["node", "bin/sync.js"]
