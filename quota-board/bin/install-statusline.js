@@ -25,9 +25,13 @@ function originalFile() {
 }
 
 function bridgeCommand(original) {
-  const script = path.join(__dirname, 'statusline.js');
-  const base = `node "${script}" claude`;
+  const base = `node "${path.join(__dirname, 'statusline.js')}" claude --state-dir "${stateDir()}"`;
   return original ? `${base} -- ${original}` : base;
+}
+
+// agy has no settings file to edit: its status line is set from inside the CLI.
+function agyCommand() {
+  return `node "${path.join(__dirname, 'statusline.js')}" agy --state-dir "${stateDir()}"`;
 }
 
 function install() {
@@ -38,8 +42,20 @@ function install() {
     return 1;
   }
   const current = settings.statusLine;
-  if (current?.command?.includes(MARKER)) {
+  const wanted = current?.command?.includes(MARKER)
+    // Already ours: keep whatever it wraps and rebuild the rest, so a moved
+    // plugin path or state directory repairs itself.
+    ? bridgeCommand(current.command.split(' -- ').slice(1).join(' -- ') || null)
+    : null;
+  if (wanted && wanted === current.command) {
     process.stdout.write('statusLine bridge is already installed\n');
+    return 0;
+  }
+  if (wanted) {
+    settings.statusLine = { type: 'command', command: wanted };
+    writeJsonAtomic(file, settings);
+    process.stdout.write(`statusLine bridge repaired in ${file}\n`);
+    process.stdout.write(`for agy, run /statusline inside it and paste:\n  ${agyCommand()}\n`);
     return 0;
   }
 
@@ -52,6 +68,7 @@ function install() {
   process.stdout.write(`statusLine bridge installed in ${file}\n`);
   if (original) process.stdout.write(`the previous status line still runs: ${original}\n`);
   process.stdout.write('backup: ' + `${file}.bak-quota-board\n`);
+  process.stdout.write(`for agy, run /statusline inside it and paste:\n  ${agyCommand()}\n`);
   return 0;
 }
 

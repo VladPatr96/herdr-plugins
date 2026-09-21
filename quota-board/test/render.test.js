@@ -60,3 +60,16 @@ test('the footer says how old the reading is', () => {
   assert.strictEqual(updatedLabel(NOW - 600, NOW), 'updated 10m ago');
   assert.strictEqual(updatedLabel(null, NOW), 'never refreshed');
 });
+
+test('a long reason wraps at the pane width instead of breaking a word', () => {
+  const lines = renderBoard({
+    providers: [{ id: 'claude', label: 'Claude Code', state: 'error', note: 'usage endpoint is rate limited — install the statusLine bridge (see README)' }],
+    updatedAt: NOW,
+    color: false,
+    now: NOW,
+    width: 56,
+  });
+  const body = lines.filter((line) => line.includes('rate limited') || line.trim().startsWith('bridge') || line.includes('statusLine'));
+  assert.ok(body.length >= 2, 'the reason takes more than one line');
+  for (const line of lines) assert.ok(line.length <= 56, `line too wide: ${line}`);
+});

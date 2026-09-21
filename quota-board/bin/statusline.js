@@ -7,10 +7,18 @@
 // anything after `--` is run with the same stdin and its output is passed
 // through, so an existing status line keeps working.
 //
-//   node bin/statusline.js agy
-//   node bin/statusline.js claude -- powershell -File C:\path\to\your-statusline.ps1
+//   node bin/statusline.js agy --state-dir <dir>
+//   node bin/statusline.js claude --state-dir <dir> -- powershell -File your-statusline.ps1
 
 const { spawn } = require('node:child_process');
+
+// The bridge is launched by the agent, not by Herdr, so the plugin state
+// directory has to be passed in. Set it before anything reads it.
+const stateDirFlag = process.argv.indexOf('--state-dir');
+if (stateDirFlag >= 0 && process.argv[stateDirFlag + 1]) {
+  process.env.HERDR_PLUGIN_STATE_DIR = process.argv[stateDirFlag + 1];
+}
+
 const statusline = require('../lib/statusline-store');
 
 function readStdin() {
@@ -59,9 +67,12 @@ function passThrough(argv, input) {
 }
 
 async function main() {
-  const [provider, ...rest] = process.argv.slice(2);
+  const argv = process.argv.slice(2);
+  const flag = argv.indexOf('--state-dir');
+  if (flag >= 0) argv.splice(flag, 2);
+  const [provider, ...rest] = argv;
   if (!provider) {
-    process.stderr.write('usage: statusline.js <claude|agy> [-- <original status line command>]\n');
+    process.stderr.write('usage: statusline.js <claude|agy> [--state-dir <dir>] [-- <original status line command>]\n');
     process.exitCode = 2;
     return;
   }

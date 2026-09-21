@@ -18,7 +18,8 @@ function interval() {
 const state = { busy: false, view: cachedOrEmpty(), timer: null };
 
 function draw() {
-  const lines = renderBoard({ ...state.view, busy: state.busy, color: true });
+  const width = process.stdout.columns || 80;
+  const lines = renderBoard({ ...state.view, busy: state.busy, color: true, width });
   process.stdout.write('\u001b[2J\u001b[H');
   process.stdout.write(lines.join('\r\n'));
 }
