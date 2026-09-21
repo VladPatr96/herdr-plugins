@@ -31,6 +31,9 @@ updated 12s ago   r refresh   q close
   has are all rows of their own.
 - **Local time.** Resets are printed in the timezone of the machine Herdr runs
   on, with the countdown next to them.
+- **What the spend went on.** For the providers OpenCode records, a folded line
+  shows the last 30 days — requests, cost, and how much of the input came back
+  from the prompt cache. Press `m` to unfold it into one row per model.
 - **A provider without data says so.** No credentials, no setup, an endpoint
   that refused — the row says which. It never shows a number it does not have.
 - **Works on Windows, Linux and macOS.** Node.js only, no dependencies, no build.
@@ -149,7 +152,14 @@ bridge is what keeps the two plan-wide windows visible when it does.
 
 - `bin/board.js` is the window. It draws from the cache immediately, refreshes
   in the background, repeats every 60 seconds (`QUOTA_BOARD_INTERVAL_SECONDS`),
-  and redraws on `r`.
+  redraws on `r`, and folds the per-model breakdown out and back on `m`. That
+  fold is remembered between openings.
+- The breakdown is read from OpenCode's own database
+  (`~/.local/share/opencode/opencode.db`, read-only): every assistant message it
+  stores carries the model, the provider it was billed to, input/output/cache
+  tokens and the cost OpenCode computed. The window is 30 days
+  (`QUOTA_BOARD_USAGE_DAYS`). Requests made outside OpenCode are not in there,
+  so this is spend it can see, not a bill.
 - `bin/refresh.js` asks every provider at once, with a per-provider timeout, and
   writes `quota.json` in the plugin state directory. A provider that fails keeps
   its last good reading for up to six hours, labelled `stale`. It is also a

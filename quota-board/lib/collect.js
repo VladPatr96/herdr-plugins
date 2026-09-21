@@ -5,6 +5,7 @@
 
 const path = require('node:path');
 const { stateDir, readJson, writeJsonAtomic } = require('./runtime');
+const { readUsage } = require('./usage-db');
 
 const PROVIDERS = [
   require('./providers/claude'),
@@ -82,8 +83,13 @@ async function collect({ timeoutMs = 25_000, only = null } = {}) {
     }),
   );
 
+  // Local spend per model, for the providers whose requests OpenCode records.
+  const usage = readUsage() || {};
+
   const cache = { version: CACHE_VERSION, updatedAt: now, providers: { ...previous.providers } };
-  for (const result of results) cache.providers[result.id] = result;
+  for (const result of results) {
+    cache.providers[result.id] = usage[result.id] ? { ...result, usage: usage[result.id] } : result;
+  }
   writeCache(cache);
   return cache;
 }

@@ -3,7 +3,7 @@
 // The board's text, built as an array of lines so it can be tested without a
 // terminal. Colour is optional for the same reason.
 
-const { paint, windowLine, balanceLine, clock, resetAt, countdown, STATE_NOTES } = require('./format');
+const { paint, windowLine, balanceLine, clock, resetAt, countdown, usageSummary, modelLine, STATE_NOTES } = require('./format');
 
 const LABEL_WIDTH = 18;
 const MIN_TEXT_WIDTH = 24;
@@ -50,7 +50,7 @@ function resetColumn(providers, now) {
   return widths.length ? Math.max(...widths) : 0;
 }
 
-function providerBlock(snapshot, { color = true, now, width = 80, labelWidth, resetWidth = 0 } = {}) {
+function providerBlock(snapshot, { color = true, now, width = 80, labelWidth, resetWidth = 0, models = false } = {}) {
   const lines = [];
   const label = snapshot.label.padEnd(LABEL_WIDTH);
   const textWidth = Math.max(MIN_TEXT_WIDTH, width - LABEL_WIDTH - 1);
@@ -71,12 +71,23 @@ function providerBlock(snapshot, { color = true, now, width = 80, labelWidth, re
   if (snapshot.stale) extras.push('stale');
   if (snapshot.state === 'ok' && snapshot.note) extras.push(snapshot.note);
 
+  // What this provider actually spent locally, and — folded away unless asked
+  // for — the same split per model.
+  const spend = usageSummary(snapshot.usage);
+  if (spend) extras.push(models ? spend : `${spend}  [m]`);
+
   rows.forEach((row, index) => {
     const prefix = index === 0 ? paint(label, 'bold', color) : ' '.repeat(LABEL_WIDTH);
     lines.push(`${prefix} ${row}`);
   });
   for (const line of extras.length ? wrap(extras.join(' · '), textWidth) : []) {
     lines.push(`${' '.repeat(LABEL_WIDTH)} ${paint(line, 'grey', color)}`);
+  }
+  if (models && snapshot.usage?.models?.length) {
+    const nameWidth = Math.max(...snapshot.usage.models.map((model) => model.model.length));
+    for (const model of snapshot.usage.models) {
+      lines.push(`${' '.repeat(LABEL_WIDTH + 2)} ${paint(modelLine(model, { nameWidth }), 'grey', color)}`);
+    }
   }
   return lines;
 }
@@ -91,7 +102,7 @@ function updatedLabel(updatedAt, now = Math.floor(Date.now() / 1000)) {
   return `updated ${at} · ${Math.floor(minutes / 60)}h ${minutes % 60}m ago`;
 }
 
-function renderBoard({ providers, updatedAt, busy = false, color = true, now, width = 80 }) {
+function renderBoard({ providers, updatedAt, busy = false, color = true, now, width = 80, models = false }) {
   const lines = [];
   const subtitle = width >= 60 ? '  ·  every subscription and API you run in Herdr' : '';
   lines.push(paint('AI quota', 'bold', color) + paint(subtitle, 'grey', color));
@@ -99,11 +110,13 @@ function renderBoard({ providers, updatedAt, busy = false, color = true, now, wi
   const labelWidth = labelColumn(providers);
   const resetWidth = resetColumn(providers, now);
   for (const snapshot of providers) {
-    lines.push(...providerBlock(snapshot, { color, now, width, labelWidth, resetWidth }));
+    lines.push(...providerBlock(snapshot, { color, now, width, labelWidth, resetWidth, models }));
     lines.push('');
   }
   const status = busy ? 'refreshing…' : updatedLabel(updatedAt, now);
-  lines.push(paint(`${status}   r refresh   q close`, 'grey', color));
+  const hasModels = providers.some((snapshot) => snapshot.usage?.models?.length);
+  const keys = ['r refresh', hasModels ? `m ${models ? 'hide' : 'show'} models` : null, 'q close'].filter(Boolean);
+  lines.push(paint(`${status}   ${keys.join('   ')}`, 'grey', color));
   return lines;
 }
 

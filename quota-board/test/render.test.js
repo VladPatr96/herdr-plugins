@@ -111,3 +111,40 @@ test('the countdowns line up too, whatever the clock time looks like', () => {
   assert.strictEqual(columns.length, 2);
   assert.strictEqual(new Set(columns).size, 1, `countdowns start at ${[...new Set(columns)].join(', ')}`);
 });
+
+const USAGE_PROVIDER = {
+  id: 'deepseek',
+  label: 'DeepSeek API',
+  state: 'ok',
+  balance: { currency: 'USD', total: '7.23', available: true },
+  usage: {
+    days: 7,
+    requests: 225,
+    cost: 0.2075,
+    input: 233_000,
+    output: 47_000,
+    cacheRead: 20_492_928,
+    cacheWrite: 0,
+    models: [
+      { model: 'deepseek-flash', requests: 222, cost: 0.1855, input: 232_555, output: 47_477, cacheRead: 20_492_928, cacheWrite: 0 },
+      { model: 'deepseek-v4-pro', requests: 3, cost: 0.022, input: 44_018, output: 1247, cacheRead: 66_688, cacheWrite: 0 },
+    ],
+  },
+};
+
+test('the per-model breakdown is folded away until asked for', () => {
+  const folded = board([USAGE_PROVIDER]);
+  assert.match(folded, /225 req · \$0\.21 · 99% cached/);
+  assert.match(folded, /\[m\]/, 'the fold says how to open it');
+  assert.doesNotMatch(folded, /deepseek-flash/);
+  assert.match(folded, /m show models/);
+});
+
+test('opened, it lists every model with cost, tokens and cache', () => {
+  const opened = renderBoard({ providers: [USAGE_PROVIDER], updatedAt: NOW, color: false, now: NOW, models: true }).join('\n');
+  assert.match(opened, /deepseek-flash\s+222 req\s+\$0\.19/);
+  assert.match(opened, /deepseek-v4-pro\s+3 req\s+\$0\.02/);
+  assert.match(opened, /cache\s+20M \(99%\)/);
+  assert.match(opened, /m hide models/);
+  assert.doesNotMatch(opened, /\[m\]/);
+});

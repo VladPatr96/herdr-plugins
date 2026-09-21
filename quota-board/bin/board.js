@@ -6,6 +6,8 @@
 
 const { collect, cachedOrEmpty } = require('../lib/collect');
 const { renderBoard } = require('../lib/render-board');
+const { stateDir, readJson, writeJsonAtomic } = require('../lib/runtime');
+const path = require('node:path');
 
 const DEFAULT_INTERVAL_SECONDS = 60;
 
@@ -14,11 +16,32 @@ function interval() {
   return (Number.isFinite(configured) && configured >= 15 ? configured : DEFAULT_INTERVAL_SECONDS) * 1000;
 }
 
-const state = { busy: false, view: cachedOrEmpty(), timer: null };
+// Whether the per-model breakdown is folded out. Kept between openings,
+// because it is a preference, not a mode.
+function modelsFile() {
+  return path.join(stateDir(), 'view.json');
+}
+
+const state = {
+  busy: false,
+  view: cachedOrEmpty(),
+  timer: null,
+  models: readJson(modelsFile())?.models === true,
+};
+
+function toggleModels() {
+  state.models = !state.models;
+  try {
+    writeJsonAtomic(modelsFile(), { models: state.models });
+  } catch {
+    /* a preference not surviving the session is not worth an error */
+  }
+  draw();
+}
 
 function draw() {
   const width = process.stdout.columns || 80;
-  const lines = renderBoard({ ...state.view, busy: state.busy, color: true, width });
+  const lines = renderBoard({ ...state.view, busy: state.busy, color: true, width, models: state.models });
   process.stdout.write('\u001b[2J\u001b[H');
   process.stdout.write(lines.join('\r\n'));
 }
@@ -57,6 +80,7 @@ function main() {
     process.stdin.setEncoding('utf8');
     process.stdin.on('data', (key) => {
       if (key === 'r' || key === 'R') refresh();
+      else if (key === 'm' || key === 'M') toggleModels();
       // q, Esc, Ctrl+C, Ctrl+D all close the window.
       else if (key === 'q' || key === 'Q' || key === '\u001b' || key === '\u0003' || key === '\u0004') quit();
     });
