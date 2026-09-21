@@ -76,7 +76,7 @@ test('codex lists every pool it bills, the plan first', () => {
       },
     },
   });
-  assert.deepStrictEqual(windows.map((w) => w.label), ['7d', '7d gpt-reserve'], 'the plan pool is not repeated');
+  assert.deepStrictEqual(windows.map((w) => w.label), ['7d', '7d Luna Reserve'], 'the plan pool is not repeated, and the reserve gets its readable name');
 });
 
 test('codex counts the reset credits that are still usable', () => {

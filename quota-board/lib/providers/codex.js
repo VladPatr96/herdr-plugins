@@ -14,6 +14,15 @@ function windowLabel(minutes) {
   return `${minutes}m`;
 }
 
+// Codex's own TUI prints `gpt-reserve` as "Luna Reserve"; the raw id means
+// nothing to a reader.
+// https://github.com/openai/codex/blob/main/codex-rs/tui/src/model_catalog.rs
+const POOL_NAMES = { 'gpt-reserve': 'Luna Reserve' };
+
+function poolName(name) {
+  return POOL_NAMES[String(name).toLowerCase()] || name;
+}
+
 function windowsOf(limit, name) {
   const windows = [];
   for (const field of ['primary', 'secondary']) {
@@ -21,7 +30,7 @@ function windowsOf(limit, name) {
     if (!window || typeof window.usedPercent !== 'number') continue;
     const base = windowLabel(window.windowDurationMins);
     windows.push({
-      label: name ? `${base} ${name}` : base,
+      label: name ? `${base} ${poolName(name)}` : base,
       usedPercent: window.usedPercent,
       resetsAt: typeof window.resetsAt === 'number' ? window.resetsAt : null,
     });
