@@ -38,15 +38,31 @@ test('claude usage payload turns into windows', () => {
   assert.strictEqual(windows[0].usedPercent, 58);
 });
 
+test('agy quota from its status line: both groups, both windows', () => {
+  const seenAt = 1_789_988_252;
+  const windows = agy.__test.parseQuota({
+    '3p-5h': { remaining_fraction: 1, reset_in_seconds: 17984 },
+    '3p-weekly': { remaining_fraction: 0.8016915, reset_time: '2026-09-21T17:04:35Z' },
+    'gemini-5h': { remaining_fraction: 1, reset_in_seconds: 17984 },
+    'gemini-weekly': { remaining_fraction: 0.7424428, reset_time: '2026-09-23T02:32:58Z' },
+  }, seenAt);
+  assert.deepStrictEqual(
+    windows.map((w) => w.label),
+    ['5h Gemini', '7d Gemini', '5h Claude/GPT', '7d Claude/GPT'],
+    'Gemini first and the short window on top, the way agy lists them',
+  );
+  assert.strictEqual(Math.round((100 - windows[1].usedPercent) * 100) / 100, 74.24);
+  assert.strictEqual(windows[0].resetsAt, seenAt + 17984, 'a countdown is anchored to when the line was taken');
+});
+
 test('agy accepts either used or remaining percentages', () => {
   const windows = agy.__test.parseQuota({
-    weekly_native: { used_percentage: 40, resets_at: 1790324036 },
-    weekly_third_party: { remaining_percentage: 25 },
-    model: 'gemini',
+    weekly: { used_percentage: 40, resets_at: 1790324036 },
+    five_hour: { remaining_percentage: 25 },
   });
   assert.deepStrictEqual(windows, [
-    { label: '7d gemini', usedPercent: 40, resetsAt: 1790324036 },
-    { label: '7d other', usedPercent: 75, resetsAt: null },
+    { label: '5h', usedPercent: 75, resetsAt: null },
+    { label: '7d', usedPercent: 40, resetsAt: 1790324036 },
   ]);
 });
 
