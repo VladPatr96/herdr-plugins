@@ -1,0 +1,11 @@
+{
+  "name": "herdr-quota-board",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Subscription and API quota for every AI agent you use, in one Herdr window",
+  "license": "MIT",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "test": "node --test"
+  }
+}
