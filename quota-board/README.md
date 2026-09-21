@@ -56,10 +56,10 @@ Herdr's config file is `%APPDATA%\herdr\config.toml` on Windows and
 
 ```toml
 [[keys.command]]
-key = "alt+u"
+key = "alt+shift+q"
 type = "plugin_action"
 command = "vladpatr96.quota-board.open"
-description = "AI quota"
+description = "AI quota board"
 ```
 
 Reload with `herdr server reload-config`. The window opens as an overlay over
@@ -126,13 +126,15 @@ herdr plugin action invoke install-statusline --plugin vladpatr96.quota-board
 herdr plugin action invoke remove-statusline  --plugin vladpatr96.quota-board   # undo
 ```
 
-agy — run `/statusline` inside `agy` and point it at:
+agy — the same action prints the line to paste. Run `/statusline` inside `agy`
+and give it:
 
 ```
-node "<plugin root>/bin/statusline.js" agy
+node "<plugin root>/bin/statusline.js" agy --state-dir "<state dir>"
 ```
 
-`<plugin root>` is what `herdr plugin list` prints for this plugin.
+Both paths are printed by `install-statusline`; `--state-dir` is needed because
+the agent launches the bridge, so Herdr's own environment is not there.
 
 Claude Code also answers over its OAuth token without the bridge, but that
 endpoint is rate limited per account: with several Claude sessions open it
