@@ -45,21 +45,26 @@ function stateDir() {
 }
 
 // `bin/launch.js` is called from a Claude Code session, which never sees
-// Herdr's environment. The plugin leaves a note at a fixed place so the
-// launcher and the event hooks agree on one registry.
+// Herdr's environment, so it cannot know where Herdr keeps this plugin's
+// state. The hooks that Herdr does run leave a note at a fixed place, and the
+// launcher follows it.
 function pointerFile() {
   return path.join(os.tmpdir(), 'herdr-agent-tasks.state-dir');
 }
 
+// Only a process Herdr started may write the note: it is the one that knows
+// the real directory. A launcher writing its own fallback here would split the
+// registry in two, and whichever ran last would win.
 function rememberStateDir() {
   const dir = stateDir();
+  if (!process.env.HERDR_PLUGIN_STATE_DIR) return resolvedStateDir();
   try {
     if (fs.readFileSync(pointerFile(), 'utf8').trim() !== dir) fs.writeFileSync(pointerFile(), dir);
   } catch {
     try {
       fs.writeFileSync(pointerFile(), dir);
     } catch {
-      /* a read-only temp dir is not worth failing a launch over */
+      /* a read-only temp dir is not worth failing a sync over */
     }
   }
   return dir;
