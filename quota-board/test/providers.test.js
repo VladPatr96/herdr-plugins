@@ -56,3 +56,59 @@ test('grok billing periods are never relabelled', () => {
   assert.strictEqual(windowKind('USAGE_PERIOD_TYPE_MONTHLY'), '30d');
   assert.strictEqual(windowKind('USAGE_PERIOD_TYPE_UNKNOWN'), null);
 });
+
+test('codex lists every pool it bills, the plan first', () => {
+  const windows = codex.__test.parseRateLimits({
+    rateLimits: {
+      limitId: 'codex',
+      primary: { usedPercent: 23, windowDurationMins: 10080, resetsAt: 1790324036 },
+      secondary: null,
+    },
+    rateLimitsByLimitId: {
+      base_model_inference: {
+        limitId: 'base_model_inference',
+        limitName: 'gpt-reserve',
+        primary: { usedPercent: 0, windowDurationMins: 10080, resetsAt: 1790590864 },
+      },
+      codex: {
+        limitId: 'codex',
+        primary: { usedPercent: 23, windowDurationMins: 10080, resetsAt: 1790324036 },
+      },
+    },
+  });
+  assert.deepStrictEqual(windows.map((w) => w.label), ['7d', '7d gpt-reserve'], 'the plan pool is not repeated');
+});
+
+test('codex counts the reset credits that are still usable', () => {
+  const now = 1_790_000_000;
+  const note = codex.__test.parseResetCredits({
+    rateLimitResetCredits: {
+      credits: [
+        { status: 'available', expiresAt: now + 12 * 86400 },
+        { status: 'available', expiresAt: now + 20 * 86400 },
+        { status: 'used', expiresAt: now + 2 * 86400 },
+      ],
+    },
+  }, now);
+  assert.strictEqual(note, '2 free resets available · first expires in 12d');
+  assert.strictEqual(codex.__test.parseResetCredits({}, now), null);
+});
+
+test('claude reads the per-model weekly pool from limits[]', () => {
+  const windows = claude.__test.parseUsage({
+    five_hour: { utilization: 11, resets_at: '2026-09-21T14:20:00Z' },
+    limits: [
+      { kind: 'session', group: 'session', percent: 11, resets_at: '2026-09-21T14:20:00Z', scope: null },
+      { kind: 'weekly_all', group: 'weekly', percent: 25, resets_at: '2026-09-25T07:00:00Z', scope: null },
+      {
+        kind: 'weekly_scoped',
+        group: 'weekly',
+        percent: 40,
+        resets_at: '2026-09-25T07:00:00Z',
+        scope: { model: { id: null, display_name: 'Fable' } },
+      },
+    ],
+  });
+  assert.deepStrictEqual(windows.map((w) => w.label), ['5h', '7d', '7d Fable']);
+  assert.strictEqual(windows[2].usedPercent, 40);
+});

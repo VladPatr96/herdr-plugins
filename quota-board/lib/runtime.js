@@ -13,6 +13,37 @@ function stateDir() {
   return dir;
 }
 
+// Agents launch the statusLine bridge themselves, so they never see Herdr's
+// environment. The plugin leaves a note at a fixed place saying where its state
+// lives, and the bridge follows it when no --state-dir is given.
+function pointerFile() {
+  return path.join(os.tmpdir(), 'herdr-quota-board.state-dir');
+}
+
+function rememberStateDir() {
+  const dir = stateDir();
+  try {
+    if (fs.readFileSync(pointerFile(), 'utf8').trim() !== dir) fs.writeFileSync(pointerFile(), dir);
+  } catch {
+    try {
+      fs.writeFileSync(pointerFile(), dir);
+    } catch {
+      /* a read-only temp dir is not worth failing a refresh over */
+    }
+  }
+  return dir;
+}
+
+function pointedStateDir() {
+  try {
+    const dir = fs.readFileSync(pointerFile(), 'utf8').trim();
+    if (dir) return dir;
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
+
 function configDir() {
   const dir = process.env.HERDR_PLUGIN_CONFIG_DIR || stateDir();
   fs.mkdirSync(dir, { recursive: true });
@@ -135,6 +166,8 @@ async function getJson(url, { headers = {}, timeoutMs = 10_000 } = {}) {
 module.exports = {
   resolveDir,
   stateDir,
+  rememberStateDir,
+  pointedStateDir,
   configDir,
   readJson,
   writeJsonAtomic,

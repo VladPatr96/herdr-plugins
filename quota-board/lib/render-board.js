@@ -3,7 +3,7 @@
 // The board's text, built as an array of lines so it can be tested without a
 // terminal. Colour is optional for the same reason.
 
-const { paint, windowLine, balanceLine, STATE_NOTES } = require('./format');
+const { paint, windowLine, balanceLine, clock, STATE_NOTES } = require('./format');
 
 const LABEL_WIDTH = 18;
 const MIN_TEXT_WIDTH = 24;
@@ -66,10 +66,11 @@ function providerBlock(snapshot, { color = true, now, width = 80 } = {}) {
 function updatedLabel(updatedAt, now = Math.floor(Date.now() / 1000)) {
   if (!updatedAt) return 'never refreshed';
   const age = Math.max(0, now - updatedAt);
-  if (age < 60) return `updated ${age}s ago`;
+  const at = clock(updatedAt);
+  if (age < 60) return `updated ${at} · ${age}s ago`;
   const minutes = Math.floor(age / 60);
-  if (minutes < 60) return `updated ${minutes}m ago`;
-  return `updated ${Math.floor(minutes / 60)}h ${minutes % 60}m ago`;
+  if (minutes < 60) return `updated ${at} · ${minutes}m ago`;
+  return `updated ${at} · ${Math.floor(minutes / 60)}h ${minutes % 60}m ago`;
 }
 
 function renderBoard({ providers, updatedAt, busy = false, color = true, now, width = 80 }) {

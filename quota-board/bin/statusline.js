@@ -17,6 +17,9 @@ const { spawn } = require('node:child_process');
 const stateDirFlag = process.argv.indexOf('--state-dir');
 if (stateDirFlag >= 0 && process.argv[stateDirFlag + 1]) {
   process.env.HERDR_PLUGIN_STATE_DIR = process.argv[stateDirFlag + 1];
+} else if (!process.env.HERDR_PLUGIN_STATE_DIR) {
+  const pointed = require('../lib/runtime').pointedStateDir();
+  if (pointed) process.env.HERDR_PLUGIN_STATE_DIR = pointed;
 }
 
 const statusline = require('../lib/statusline-store');
@@ -39,13 +42,21 @@ function store(provider, input) {
   try {
     payload = JSON.parse(input);
   } catch {
+    // Not JSON at all: record the shape so a broken setup can be diagnosed
+    // without guessing, and without keeping whatever the agent sent.
+    statusline.saveProbe(provider, { json: false, bytes: input.length, head: input.slice(0, 80) });
     return;
   }
   const snapshot = {};
   if (payload.rate_limits) snapshot.rate_limits = payload.rate_limits;
   if (payload.quota) snapshot.quota = payload.quota;
   if (payload.model) snapshot.model = payload.model;
-  if (Object.keys(snapshot).length) statusline.save(provider, snapshot);
+  if (Object.keys(snapshot).length) {
+    statusline.save(provider, snapshot);
+    return;
+  }
+  // JSON, but nothing we recognise: keep only the key names, never the values.
+  statusline.saveProbe(provider, { json: true, keys: Object.keys(payload).sort() });
 }
 
 // One argument is the original status line as a single shell string (that is

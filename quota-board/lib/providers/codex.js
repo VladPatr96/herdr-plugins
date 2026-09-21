@@ -14,20 +14,49 @@ function windowLabel(minutes) {
   return `${minutes}m`;
 }
 
-function parseRateLimits(result) {
-  const limits = result?.rateLimits || result?.rate_limits;
-  if (!limits) return null;
+function windowsOf(limit, name) {
   const windows = [];
   for (const field of ['primary', 'secondary']) {
-    const window = limits[field];
+    const window = limit?.[field];
     if (!window || typeof window.usedPercent !== 'number') continue;
+    const base = windowLabel(window.windowDurationMins);
     windows.push({
-      label: windowLabel(window.windowDurationMins),
+      label: name ? `${base} ${name}` : base,
       usedPercent: window.usedPercent,
       resetsAt: typeof window.resetsAt === 'number' ? window.resetsAt : null,
     });
   }
   return windows;
+}
+
+// Codex bills more than one pool: the plan's own limit plus named reserves
+// such as `gpt-reserve`. Each one gets its own row, the plan's first.
+function parseRateLimits(result) {
+  const main = result?.rateLimits || result?.rate_limits;
+  const byId = result?.rateLimitsByLimitId || result?.rate_limits_by_limit_id || {};
+  if (!main && !Object.keys(byId).length) return null;
+
+  const windows = [...windowsOf(main)];
+  const mainId = main?.limitId || main?.limit_id;
+  for (const [id, limit] of Object.entries(byId)) {
+    if (id === mainId) continue;
+    windows.push(...windowsOf(limit, limit?.limitName || limit?.limit_name || id));
+  }
+  return windows;
+}
+
+// A reset credit clears the rate limit ahead of its window. They expire, so the
+// row says how many are left and when the first one goes.
+function parseResetCredits(result, now = Math.floor(Date.now() / 1000)) {
+  const credits = (result?.rateLimitResetCredits?.credits || []).filter((c) => c.status === 'available');
+  if (!credits.length) return null;
+  const expiries = credits.map((c) => c.expiresAt).filter((value) => Number.isFinite(value));
+  const soonest = expiries.length ? Math.min(...expiries) : null;
+  const days = soonest ? Math.floor((soonest - now) / 86400) : null;
+  const plural = credits.length === 1 ? 'reset' : 'resets';
+  return days === null
+    ? `${credits.length} free ${plural} available`
+    : `${credits.length} free ${plural} available · first expires in ${days}d`;
 }
 
 // One short-lived app-server per refresh. Everything is torn down on the way
@@ -121,7 +150,8 @@ async function fetchQuota() {
       return { state: 'error', note: 'no rate limit windows in the response' };
     }
     const plan = limits?.result?.rateLimits?.planType || account?.result?.account?.planType || null;
-    return { state: 'ok', windows, plan };
+    const note = parseResetCredits(limits?.result);
+    return { state: 'ok', windows, plan, note };
   }).catch((error) => {
     const message = String(error.message || error);
     if (/ENOENT|not recognized|not found/i.test(message)) {
@@ -131,4 +161,4 @@ async function fetchQuota() {
   });
 }
 
-module.exports = { id: 'codex', label: 'Codex', kind: 'subscription', fetchQuota, __test: { windowLabel, parseRateLimits } };
+module.exports = { id: 'codex', label: 'Codex', kind: 'subscription', fetchQuota, __test: { windowLabel, parseRateLimits, parseResetCredits } };

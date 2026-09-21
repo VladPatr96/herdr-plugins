@@ -40,3 +40,18 @@ command = ["node", "bin/install-statusline.js", "--uninstall"]
 # Warm the cache when the server starts, so the window opens with numbers.
 [[startup]]
 command = ["node", "bin/refresh.js"]
+
+# Refresh while you work: a turn on any agent — a different model, a different
+# harness — updates the quota behind it. `--if-stale` keeps that to one request
+# per TTL (QUOTA_BOARD_TTL_SECONDS, default 120s) however often events fire.
+[[events]]
+on = "pane.agent_detected"
+command = ["node", "bin/refresh.js", "--if-stale"]
+
+[[events]]
+on = "pane.agent_status_changed"
+command = ["node", "bin/refresh.js", "--if-stale"]
+
+[[events]]
+on = "pane.exited"
+command = ["node", "bin/refresh.js", "--if-stale"]

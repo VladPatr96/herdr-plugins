@@ -47,10 +47,25 @@ function duration(seconds) {
   return `${minutes}m`;
 }
 
+// Clock times are the machine's own: this runs next to the terminal the person
+// is looking at, so its timezone is the one that answers "when does it reset".
+function clock(unixSeconds) {
+  return new Date(unixSeconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function weekday(unixSeconds) {
+  return new Date(unixSeconds * 1000).toLocaleDateString([], { weekday: 'short' });
+}
+
+// Same day: the time is enough. Further out: the weekday carries it, and the
+// countdown stays because "in 3d" is what you actually plan around.
 function resetIn(resetsAt, now = Math.floor(Date.now() / 1000)) {
   if (!Number.isFinite(resetsAt)) return null;
   const left = duration(resetsAt - now);
-  return left ? `resets in ${left}` : 'resets now';
+  if (!left) return 'resets now';
+  const sameDay = new Date(resetsAt * 1000).toDateString() === new Date(now * 1000).toDateString();
+  const when = sameDay ? clock(resetsAt) : `${weekday(resetsAt)} ${clock(resetsAt)}`;
+  return `resets ${when} · in ${left}`;
 }
 
 function windowLine(window, { color = true, now } = {}) {
@@ -80,6 +95,7 @@ const STATE_NOTES = {
 };
 
 module.exports = {
+  clock,
   paint,
   leftPercent,
   severity,

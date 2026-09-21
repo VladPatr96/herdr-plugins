@@ -19,4 +19,18 @@ function load(provider) {
   return readJson(file(provider));
 }
 
-module.exports = { save, load, file };
+// What a bridge received when it carried nothing we could use: key names only,
+// so "the status line runs but the panel stays empty" can be told apart from
+// "the status line never ran".
+function saveProbe(provider, shape) {
+  writeJsonAtomic(path.join(stateDir(), `statusline-${provider}-probe.json`), {
+    ...shape,
+    seenAt: Math.floor(Date.now() / 1000),
+  });
+}
+
+function loadProbe(provider) {
+  return readJson(path.join(stateDir(), `statusline-${provider}-probe.json`));
+}
+
+module.exports = { save, load, saveProbe, loadProbe, file };

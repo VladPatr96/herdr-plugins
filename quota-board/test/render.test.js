@@ -21,7 +21,7 @@ test('a provider with data shows every window', () => {
   ]);
   assert.match(text, /Codex/);
   assert.match(text, /78% left/);
-  assert.match(text, /resets in 1d 0h/);
+  assert.match(text, /resets .* in 1d 0h/);
 });
 
 test('a provider without data says why instead of showing a number', () => {
@@ -55,9 +55,9 @@ test('the balance row has no bar', () => {
   assert.doesNotMatch(text, /█/);
 });
 
-test('the footer says how old the reading is', () => {
-  assert.strictEqual(updatedLabel(NOW - 30, NOW), 'updated 30s ago');
-  assert.strictEqual(updatedLabel(NOW - 600, NOW), 'updated 10m ago');
+test('the footer says when the reading was taken, in local time', () => {
+  assert.match(updatedLabel(NOW - 30, NOW), /^updated \d{2}:\d{2} · 30s ago$/);
+  assert.match(updatedLabel(NOW - 600, NOW), /^updated \d{2}:\d{2} · 10m ago$/);
   assert.strictEqual(updatedLabel(null, NOW), 'never refreshed');
 });
 

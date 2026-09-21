@@ -1,22 +1,31 @@
 'use strict';
 
-// Claude Code's own OAuth token answers for its plan windows, which keeps this
-// out of the user's statusLine. The statusLine bridge stays as a fallback for
-// when the token is missing or the endpoint refuses.
+// Claude Code's own OAuth token answers for its plan windows, including the
+// per-model weekly pools (Fable) that the status line does not carry. The
+// status line bridge stays as the fallback: that endpoint is rate limited per
+// account, and several open sessions are enough to get a 429.
 
 const path = require('node:path');
 const { home, readJson, getJson, resolveDir } = require('../runtime');
 const statusline = require('../statusline-store');
+const { clock } = require('../format');
 
 const USAGE_URL = 'https://api.anthropic.com/api/oauth/usage';
 const BETA = 'oauth-2025-04-20';
-const USER_AGENT = 'claude-cli/2.1.0 (external, cli)';
+const USER_AGENT = 'claude-cli/2.1.278 (external, cli)';
 
 const WINDOW_LABELS = {
   five_hour: '5h',
   seven_day: '7d',
   seven_day_opus: '7d opus',
   seven_day_oauth_apps: '7d apps',
+};
+
+// `limits[]` is what Claude Code's own /usage draws: one row per window, with
+// the model named for a scoped one.
+const LIMIT_KINDS = {
+  session: '5h',
+  weekly_all: '7d',
 };
 
 function configDir() {
@@ -34,21 +43,52 @@ function label(key) {
   return WINDOW_LABELS[key] || key.replace(/_/g, ' ');
 }
 
-// The payload carries one object per window; anything with a utilization
-// number is a window, whatever Anthropic adds later.
-function parseUsage(body) {
+function seconds(value) {
+  if (!value) return null;
+  const parsed = typeof value === 'number' ? value : Date.parse(value) / 1000;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+// A scoped weekly window belongs to one model ("7d Fable"); an unscoped one is
+// the plan's own week.
+function limitLabel(limit) {
+  const model = limit.scope?.model?.display_name;
+  if (limit.kind === 'weekly_scoped') return model ? `7d ${model}` : '7d scoped';
+  return LIMIT_KINDS[limit.kind] || String(limit.kind).replace(/_/g, ' ');
+}
+
+function parseLimits(limits) {
   const windows = [];
-  for (const [key, value] of Object.entries(body || {})) {
-    if (!value || typeof value !== 'object') continue;
-    const used = typeof value.utilization === 'number' ? value.utilization : null;
-    if (used === null) continue;
-    const reset = value.resets_at ? Date.parse(value.resets_at) / 1000 : null;
-    windows.push({ label: label(key), usedPercent: used, resetsAt: Number.isFinite(reset) ? reset : null });
+  for (const limit of limits || []) {
+    if (!limit || typeof limit.percent !== 'number') continue;
+    windows.push({
+      label: limitLabel(limit),
+      usedPercent: limit.percent,
+      resetsAt: seconds(limit.resets_at),
+      severity: limit.severity && limit.severity !== 'normal' ? limit.severity : null,
+    });
   }
   return windows;
 }
 
-// statusLine stdin gives `rate_limits.five_hour.used_percentage`.
+// Older payloads carry one object per window at the top level instead.
+function parseWindows(body) {
+  const windows = [];
+  for (const [key, value] of Object.entries(body || {})) {
+    if (!value || typeof value !== 'object') continue;
+    if (typeof value.utilization !== 'number') continue;
+    windows.push({ label: label(key), usedPercent: value.utilization, resetsAt: seconds(value.resets_at) });
+  }
+  return windows;
+}
+
+function parseUsage(body) {
+  const fromLimits = parseLimits(body?.limits);
+  return fromLimits.length ? fromLimits : parseWindows(body);
+}
+
+// statusLine stdin gives `rate_limits.five_hour.used_percentage`, and only the
+// two plan-wide windows — no per-model pool.
 function fromStatusline() {
   const seen = statusline.load('claude');
   const limits = seen?.rate_limits;
@@ -56,30 +96,20 @@ function fromStatusline() {
   const windows = [];
   for (const [key, value] of Object.entries(limits)) {
     if (!value || typeof value.used_percentage !== 'number') continue;
-    const reset = typeof value.resets_at === 'number'
-      ? value.resets_at
-      : value.resets_at ? Date.parse(value.resets_at) / 1000 : null;
-    windows.push({ label: label(key), usedPercent: value.used_percentage, resetsAt: Number.isFinite(reset) ? reset : null });
+    windows.push({ label: label(key), usedPercent: value.used_percentage, resetsAt: seconds(value.resets_at) });
   }
   if (!windows.length) return null;
-  return { state: 'ok', windows, note: `from statusLine, seen ${new Date(seen.seenAt * 1000).toISOString().slice(11, 16)} UTC` };
+  return {
+    state: 'ok',
+    windows,
+    note: `from statusLine, seen ${clock(seen.seenAt)}; no per-model pool there`,
+  };
 }
 
-// How fresh a statusLine reading has to be to be preferred over the endpoint.
-const STATUSLINE_FRESH_SECONDS = 30 * 60;
-
 async function fetchQuota() {
-  // The status line is the cheaper and more reliable of the two: it is exactly
-  // what this machine's own session was told. Use the endpoint only when that
-  // reading is missing or old.
-  const fresh = fromStatusline();
-  if (fresh && Math.floor(Date.now() / 1000) - (statusline.load('claude')?.seenAt || 0) < STATUSLINE_FRESH_SECONDS) {
-    return fresh;
-  }
-
   const credentials = accessToken();
   if (!credentials) {
-    return fresh || {
+    return fromStatusline() || {
       state: 'no-credentials',
       note: 'no OAuth login in ~/.claude/.credentials.json',
     };
@@ -94,20 +124,25 @@ async function fetchQuota() {
       },
     });
     const windows = parseUsage(body);
-    if (!windows.length) return fromStatusline() || { state: 'error', note: 'usage response has no windows' };
-    return { state: 'ok', windows };
+    if (windows.length) return { state: 'ok', windows };
+    return fromStatusline() || { state: 'error', note: 'usage response has no windows' };
   } catch (error) {
-    if (fresh) return { ...fresh, note: `${fresh.note}; usage endpoint said ${error.message}` };
-    const expired = credentials.expiresAt && credentials.expiresAt < Date.now();
-    if (expired) return { state: 'error', note: 'the stored OAuth token has expired — run `claude` once' };
-    if (error.status === 429) {
-      return {
-        state: 'error',
-        note: 'usage endpoint is rate limited — install the statusLine bridge (see README)',
-      };
+    const fallback = fromStatusline();
+    if (fallback) {
+      const reason = error.status === 429 ? 'usage endpoint is rate limited' : `usage endpoint: ${error.message}`;
+      return { ...fallback, note: `${fallback.note}; ${reason}` };
+    }
+    if (credentials.expiresAt && credentials.expiresAt < Date.now()) {
+      return { state: 'error', note: 'the stored OAuth token has expired — run `claude` once' };
     }
     return { state: 'error', note: `usage endpoint: ${error.message}` };
   }
 }
 
-module.exports = { id: 'claude', label: 'Claude Code', kind: 'subscription', fetchQuota, __test: { parseUsage, label } };
+module.exports = {
+  id: 'claude',
+  label: 'Claude Code',
+  kind: 'subscription',
+  fetchQuota,
+  __test: { parseUsage, parseLimits, limitLabel, label },
+};

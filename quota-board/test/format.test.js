@@ -29,7 +29,14 @@ test('durations read as a person would say them', () => {
   assert.strictEqual(duration(-5), null, 'a window in the past has no countdown');
 });
 
-test('reset countdown is relative to now', () => {
-  assert.strictEqual(resetIn(1000 + 7200, 1000), 'resets in 2h 0m');
-  assert.strictEqual(resetIn(null, 1000), null);
+test('a reset shows the local clock time and the countdown', () => {
+  const now = 1_790_000_000;
+  assert.match(resetIn(now + 7200, now), /^resets \d{2}:\d{2} · in 2h 0m$/);
+  assert.strictEqual(resetIn(null, now), null);
+});
+
+test('a reset on another day names the weekday', () => {
+  const now = 1_790_000_000;
+  // The weekday comes from the machine's locale, so only its shape is checked.
+  assert.match(resetIn(now + 3 * 86400, now), /^resets \S+,? \d{2}:\d{2} · in 3d 0h$/);
 });

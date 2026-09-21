@@ -6,6 +6,7 @@
 // inventing a number.
 
 const statusline = require('../statusline-store');
+const { clock } = require('../format');
 
 const POOL_LABELS = {
   five_hour: '5h',
@@ -38,22 +39,31 @@ function parseQuota(quota) {
   return windows;
 }
 
+const SETUP_HINT = 'run `/statusline node <plugin root>/bin/statusline.js agy` inside agy';
+
 async function fetchQuota() {
   const seen = statusline.load('agy');
   if (!seen) {
-    return {
-      state: 'setup-needed',
-      note: 'run /statusline inside agy and point it at bin/statusline.js agy',
-    };
+    // The bridge may have run and found nothing usable — that is a different
+    // problem from never having been set up, and it is worth saying which.
+    const probe = statusline.loadProbe('agy');
+    if (probe) {
+      const shape = probe.json ? `fields: ${(probe.keys || []).join(', ') || 'none'}` : 'not JSON';
+      return {
+        state: 'setup-needed',
+        note: `agy's status line ran at ${clock(probe.seenAt)} but carried no quota (${shape})`,
+      };
+    }
+    return { state: 'setup-needed', note: SETUP_HINT };
   }
   const windows = parseQuota(seen.quota);
   if (!windows.length) {
-    return { state: 'setup-needed', note: 'agy statusLine sent no quota block yet' };
+    return { state: 'setup-needed', note: `agy's status line ran at ${clock(seen.seenAt)} with an empty quota block` };
   }
   return {
     state: 'ok',
     windows,
-    note: `from statusLine, seen ${new Date(seen.seenAt * 1000).toISOString().slice(11, 16)} UTC`,
+    note: `from statusLine, seen ${clock(seen.seenAt)}`,
   };
 }
 
