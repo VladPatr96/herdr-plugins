@@ -81,10 +81,22 @@ Codex запускается тем же способом и **попадает 
   копит ввод в «Queued follow-up inputs», не начиная сессию;
 - `codex doctor` сам не завершается.
 
-Квота codex при этом целая (7d — 24%). Похоже на сломанный локальный рантайм
-codex: помогает обычно `codex update` или перезапуск его app-server. Плагин в
-этом случае честно отвечает `queued: true` и **второй раз задачу не шлёт**,
-чтобы она не пришла дважды.
+Квота codex при этом целая (7d — 24%).
+
+`codex doctor` называет причину прямо: **`app-server background server socket
+is stale or unreachable`**, и `codex app-server daemon version` подтверждает —
+`failed to connect to C:\Users\user\.codex\app-server-control\app-server-control.sock`
+(«конечный компьютер отверг запрос на подключение», os error 10061). В папке
+`~/.codex/app-server-daemon/` нет ни `settings.json`, ни pid-файлов. Сессия
+codex поднимается через этот демон, поэтому TUI и застревает на
+`model: loading`.
+
+Чинится это на стороне codex, не плагина: поднять демон заново
+(`codex app-server daemon` или `codex update`). Вашу установку codex я не
+трогал — это за пределами задачи.
+
+Плагин в этом случае честно отвечает `queued: true` и **второй раз задачу не
+шлёт**, чтобы она не пришла дважды.
 
 Если почините codex — проверьте пункт 3 с `--kind codex`, и тогда условие
 готовности закроется целиком.
