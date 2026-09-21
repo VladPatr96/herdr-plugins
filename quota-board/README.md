@@ -14,7 +14,7 @@ Claude Code        5h       █████████░  89% left · resets i
 Codex              7d            ███████░░░  77% left · resets in 3d 21h
                    7d gpt-reserve ██████████ 100% left · resets in 6d 4h
                    prolite · 2 free resets available · first expires in 12d
-agy / Antigravity  needs setup: run /statusline inside agy
+Antigravity  needs setup: run /statusline inside agy
 Grok               7d       ██████████ 100% left · resets in 47m
 OpenCode Go        5h       ██████████ 100% left · resets in 4h 56m
                    7d       ██████████ 100% left · resets in 6d 14h
@@ -91,7 +91,7 @@ Reload with `herdr server reload-config`.
 |---|---|---|
 | Claude Code | `api.anthropic.com/api/oauth/usage` with the OAuth token Claude Code already stored — the same rows its own `/usage` shows, per-model weekly pools included; the statusLine bridge below is the fallback | a Claude Code login |
 | Codex | `codex app-server` → `account/rateLimits/read`, the same call the CLI's `/status` makes: every pool it bills, plus the free rate-limit resets left on the account | the `codex` CLI on `PATH`, signed in with ChatGPT |
-| agy / Antigravity | the CLI's own status line — the only local surface that carries its quota | `/statusline` inside `agy`, see below |
+| Antigravity | the CLI's own status line — the only local surface that carries its quota | `/statusline` inside `agy`, see below |
 | Grok | the billing endpoint the Grok CLI itself reads, with the credentials in `~/.grok/auth.json` | a `grok` login |
 | OpenCode Go | `opencode.ai/zen/go/v1/usage` with the Go credential in OpenCode's `auth.json` | an OpenCode Go plan |
 | DeepSeek API | `api.deepseek.com/user/balance` | `DEEPSEEK_API_KEY`, see below |

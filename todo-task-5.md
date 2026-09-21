@@ -19,7 +19,7 @@ Claude Code        5h       ████████░░  83% left · resets 1
 Codex              7d            ███████░░░  77% left · resets пт 11:13
                    7d gpt-reserve ██████████ 100% left · resets пн 13:33
                    prolite · 2 free resets available · first expires in 12d
-agy / Antigravity  status line is wired up — restart agy and send it one turn
+Antigravity  status line is wired up — restart agy and send it one turn
 Grok               7d       ██████████ 100% left · resets пн 13:13 · in 6d 23h
 OpenCode Go        30d      ████████░░  80% left · resets ср 19:35 · in 2d 6h
 DeepSeek API       balance $7.23

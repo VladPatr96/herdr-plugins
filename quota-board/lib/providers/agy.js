@@ -196,7 +196,7 @@ async function fetchQuota() {
 
 module.exports = {
   id: 'agy',
-  label: 'agy / Antigravity',
+  label: 'Antigravity',
   kind: 'subscription',
   fetchQuota,
   __test: { parseQuota, splitGroupAndWindow },
