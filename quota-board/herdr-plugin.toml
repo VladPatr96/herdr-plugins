@@ -2,7 +2,7 @@ id = "vladpatr96.quota-board"
 name = "Quota Board"
 version = "0.1.0"
 min_herdr_version = "0.9.1"
-description = "Subscription and API quota for Claude Code, Codex, agy, Grok, OpenCode Go and the DeepSeek API in one Herdr window, plus a remaining-quota token in the sidebar."
+description = "Subscription and API quota for Claude Code, Codex, agy, Grok, OpenCode Go and the DeepSeek API in one Herdr window."
 platforms = ["linux", "macos", "windows"]
 
 # The window itself. Overlay keeps it transient: it zooms over the active pane
@@ -37,22 +37,6 @@ title = "Quota Board: remove the Claude statusLine bridge"
 contexts = ["workspace", "global"]
 command = ["node", "bin/install-statusline.js", "--uninstall"]
 
-# Pane metadata is dropped when the server restarts, so paint the tokens again.
+# Warm the cache when the server starts, so the window opens with numbers.
 [[startup]]
-command = ["node", "bin/sync.js"]
-
-[[events]]
-on = "pane.agent_detected"
-command = ["node", "bin/sync.js"]
-
-[[events]]
-on = "pane.agent_status_changed"
-command = ["node", "bin/sync.js"]
-
-[[events]]
-on = "pane.exited"
-command = ["node", "bin/sync.js"]
-
-[[events]]
-on = "pane.closed"
-command = ["node", "bin/sync.js"]
+command = ["node", "bin/refresh.js"]

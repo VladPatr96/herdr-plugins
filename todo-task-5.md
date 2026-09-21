@@ -24,12 +24,7 @@ DeepSeek API       balance $7.23
 - `r` — обновить прямо сейчас, само обновляется раз в минуту.
 - `q` — закрыть, фокус вернётся туда, где был.
 
-## 2. Посмотреть сайдбар
-
-- [ ] У каждого агента рядом с именем появилась синяя метка остатка (`7d 77%`).
-- [ ] Клавиша `Alt+N` от agent-hotkeys осталась у правого края.
-
-## 3. Включить квоту agy (одна команда внутри agy)
+## 2. Включить квоту agy (одна команда внутри agy)
 
 agy нигде не хранит свою квоту — её видно только его собственной статус-строке.
 Запустите `agy`, выполните в нём `/statusline` и вставьте:
@@ -41,7 +36,7 @@ node "D:\projects\my_projects\herdr_plugins\quota-board\bin\statusline.js" agy -
 После одного ответа agy в окне появится его недельная квота (два пула:
 родные модели Gemini и сторонние).
 
-## 4. Сверить цифры
+## 3. Сверить цифры
 
 Главное, ради чего всё: числа должны сходиться с тем, что показывают сами
 сервисы.
@@ -54,13 +49,13 @@ node "D:\projects\my_projects\herdr_plugins\quota-board\bin\statusline.js" agy -
 
 Если где-то расходится — скажите, где и насколько.
 
-## 5. Сообщить результат
+## 4. Сообщить результат
 
 - **Всё сходится:** я отправлю задачу на приёмку, её проверит агент с чистым
   контекстом.
 - **Что-то не так:** опишите, что видите, и я поправлю.
 
-## 6. После приёмки
+## 5. После приёмки
 
 - [ ] Смёржите PR из ветки `task/5-kvoty-podpisok-ii-agentov-pokazat-v` в `main`:
   https://github.com/VladPatr96/herdr-plugins/pull/new/task/5-kvoty-podpisok-ii-agentov-pokazat-v
@@ -73,7 +68,7 @@ node "D:\projects\my_projects\herdr_plugins\quota-board\bin\statusline.js" agy -
 | Что | Как вернуть |
 |---|---|
 | Статус-строка Claude Code (`~/.claude/settings.json`) | `herdr plugin action invoke remove-statusline --plugin vladpatr96.quota-board`; бэкап — `settings.json.bak-quota-board` |
-| Конфиг herdr (`%APPDATA%\herdr\config.toml`) | скопировать обратно `config.toml.bak-quota-board`, затем `herdr server reload-config` |
+| Конфиг herdr (`%APPDATA%\herdr\config.toml`) | в нём добавлен только хоткей `alt+shift+q`; убрать его или вернуть `config.toml.bak-quota-board`, затем `herdr server reload-config` |
 | Сам плагин | `herdr plugin unlink vladpatr96.quota-board` |
 
 ## Для сведения

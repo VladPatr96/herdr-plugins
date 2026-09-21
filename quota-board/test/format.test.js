@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { leftPercent, severity, bar, duration, resetIn, sidebarToken } = require('../lib/format');
+const { leftPercent, severity, bar, duration, resetIn } = require('../lib/format');
 
 test('remaining quota is what is left of the window', () => {
   assert.strictEqual(leftPercent(22), 78);
@@ -32,25 +32,4 @@ test('durations read as a person would say them', () => {
 test('reset countdown is relative to now', () => {
   assert.strictEqual(resetIn(1000 + 7200, 1000), 'resets in 2h 0m');
   assert.strictEqual(resetIn(null, 1000), null);
-});
-
-test('the sidebar token names the tightest window', () => {
-  const snapshot = {
-    state: 'ok',
-    windows: [
-      { label: '5h', usedPercent: 10 },
-      { label: '7d', usedPercent: 85 },
-    ],
-  };
-  assert.strictEqual(sidebarToken(snapshot), '7d 15%');
-});
-
-test('the sidebar token shows a balance when there is no window', () => {
-  assert.strictEqual(sidebarToken({ state: 'ok', balance: { currency: 'USD', total: '7.23' } }), '$7.23');
-});
-
-test('a provider without data is marked, never guessed', () => {
-  assert.strictEqual(sidebarToken({ state: 'no-credentials' }), 'n/a');
-  assert.strictEqual(sidebarToken({ state: 'setup-needed' }), 'n/a');
-  assert.strictEqual(sidebarToken(null), 'n/a');
 });

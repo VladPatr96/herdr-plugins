@@ -2,7 +2,8 @@
 
 One window with every AI quota you are actually spending: the subscription
 windows of Claude Code, Codex, agy (Antigravity), Grok and OpenCode Go, and the
-DeepSeek API balance. Press a key, see what is left, close it again.
+DeepSeek API balance. Press a key, see what is left, close it again. Nothing is
+added to the sidebar.
 
 ```
 AI quota  ·  every subscription and API you run in Herdr
@@ -25,8 +26,6 @@ updated 12s ago   r refresh   q close
   follows the same number: green, yellow under 25%, red under 10%.
 - **A provider without data says so.** No credentials, no setup, an endpoint
   that refused — the row says which. It never shows a number it does not have.
-- **A sidebar token too.** Each agent pane can carry the tightest window of the
-  provider that bills it (`7d 78%`).
 - **Works on Windows, Linux and macOS.** Node.js only, no dependencies, no build.
 
 ## Requirements
@@ -52,7 +51,7 @@ herdr plugin action invoke refresh --plugin vladpatr96.quota-board
 Herdr's config file is `%APPDATA%\herdr\config.toml` on Windows and
 `~/.config/herdr/config.toml` elsewhere (or `$HERDR_CONFIG_PATH`).
 
-**1. A key that opens the window.**
+A key that opens the window:
 
 ```toml
 [[keys.command]]
@@ -64,28 +63,6 @@ description = "AI quota board"
 
 Reload with `herdr server reload-config`. The window opens as an overlay over
 the active pane and gives the focus back when you close it with `q`.
-
-**2. The sidebar token (optional).** The plugin reports one token per agent
-pane:
-
-| Token | Value |
-|---|---|
-| `$quota` | the tightest window of that agent's provider (`7d 78%`), a balance (`$7.23`), or `n/a` |
-
-Put it on the agent's row:
-
-```toml
-[ui.sidebar.agents]
-rows = [["state_icon", "machine", "workspace", "tab"], ["agent", { token = "$quota", fg = "#89b4fa" }]]
-```
-
-Together with [agent-hotkeys](../agent-hotkeys/), keeping the key at the right
-edge:
-
-```toml
-[ui.sidebar.agents]
-rows = [["state_icon", "machine", "workspace", "tab"], ["agent", { token = "$quota", fg = "#89b4fa" }, { token = "$hotkey", align = "right", fg = "#f9e2af", bold = true }]]
-```
 
 ## Where the numbers come from
 
@@ -147,10 +124,10 @@ answers `429`, and the row then says so instead of showing a stale number.
   and redraws on `r`.
 - `bin/refresh.js` asks every provider at once, with a per-provider timeout, and
   writes `quota.json` in the plugin state directory. A provider that fails keeps
-  its last good reading for up to six hours, labelled `stale`.
-- `bin/sync.js` runs on server start and on agent lifecycle events. It repaints
-  the sidebar tokens from the cache and only goes to the network when the cache
-  is older than `QUOTA_BOARD_TTL_SECONDS` (default 300).
+  its last good reading for up to six hours, labelled `stale`. It is also a
+  plugin action, so a key can refresh without opening the window.
+- The startup hook runs `refresh` once when the Herdr server starts, so the
+  first time the window opens it already has numbers.
 
 ## Limits
 

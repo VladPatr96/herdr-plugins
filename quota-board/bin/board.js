@@ -6,7 +6,6 @@
 
 const { collect, cachedOrEmpty } = require('../lib/collect');
 const { renderBoard } = require('../lib/render-board');
-const { syncSidebar } = require('../lib/sidebar');
 
 const DEFAULT_INTERVAL_SECONDS = 60;
 
@@ -29,9 +28,8 @@ async function refresh() {
   state.busy = true;
   draw();
   try {
-    const cache = await collect();
+    await collect();
     state.view = cachedOrEmpty();
-    syncSidebar(cache);
   } catch (error) {
     process.stderr.write(`quota-board: ${error.message}\n`);
   } finally {

@@ -79,20 +79,6 @@ const STATE_NOTES = {
   error: 'no data',
 };
 
-// The one line the sidebar gets: the tightest window, or the balance.
-function sidebarToken(snapshot) {
-  if (!snapshot) return 'n/a';
-  if (snapshot.state !== 'ok') return 'n/a';
-  if (snapshot.balance) {
-    const symbol = snapshot.balance.currency === 'USD' ? '$' : '';
-    return `${symbol}${snapshot.balance.total}`;
-  }
-  const windows = snapshot.windows || [];
-  if (!windows.length) return 'n/a';
-  const tightest = windows.reduce((a, b) => (leftPercent(a.usedPercent) <= leftPercent(b.usedPercent) ? a : b));
-  return `${tightest.label} ${Math.round(leftPercent(tightest.usedPercent))}%`;
-}
-
 module.exports = {
   paint,
   leftPercent,
@@ -102,7 +88,6 @@ module.exports = {
   resetIn,
   windowLine,
   balanceLine,
-  sidebarToken,
   STATE_NOTES,
   COLORS,
 };

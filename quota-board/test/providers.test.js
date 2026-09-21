@@ -6,7 +6,6 @@ const codex = require('../lib/providers/codex');
 const claude = require('../lib/providers/claude');
 const agy = require('../lib/providers/agy');
 const grok = require('../lib/providers/grok');
-const { providerForAgent } = require('../lib/agents');
 
 test('codex window labels follow the duration it reports', () => {
   const { windowLabel } = codex.__test;
@@ -56,11 +55,4 @@ test('grok billing periods are never relabelled', () => {
   assert.strictEqual(windowKind('USAGE_PERIOD_TYPE_WEEKLY'), '7d');
   assert.strictEqual(windowKind('USAGE_PERIOD_TYPE_MONTHLY'), '30d');
   assert.strictEqual(windowKind('USAGE_PERIOD_TYPE_UNKNOWN'), null);
-});
-
-test('agents map to the provider that bills them', () => {
-  assert.strictEqual(providerForAgent('claude'), 'claude');
-  assert.strictEqual(providerForAgent('OpenCode'), 'opencode-go');
-  assert.strictEqual(providerForAgent('gemini'), null, 'an agent we do not bill gets no token');
-  assert.strictEqual(providerForAgent(undefined), null);
 });
