@@ -31,9 +31,11 @@ updated 12s ago   r refresh   q close
   has are all rows of their own.
 - **Local time.** Resets are printed in the timezone of the machine Herdr runs
   on, with the countdown next to them.
-- **What the spend went on.** For the providers OpenCode records, a folded line
-  shows the last 30 days — requests, cost, and how much of the input came back
-  from the prompt cache. Press `m` to unfold it into one row per model.
+- **What the spend went on, and what is left of it.** For the providers
+  OpenCode records, a folded line shows the last 30 days — requests, cost, and
+  how much of the input came back from the prompt cache. Press `m` to unfold it
+  into one row per model, each with roughly how many more requests of that
+  model the remaining quota is worth.
 - **A provider without data says so.** No credentials, no setup, an endpoint
   that refused — the row says which. It never shows a number it does not have.
 - **Works on Windows, Linux and macOS.** Node.js only, no dependencies, no build.
@@ -154,6 +156,13 @@ bridge is what keeps the two plan-wide windows visible when it does.
   in the background, repeats every 60 seconds (`QUOTA_BOARD_INTERVAL_SECONDS`),
   redraws on `r`, and folds the per-model breakdown out and back on `m`. That
   fold is remembered between openings.
+- `~450 more` is an estimate from your own history, never a price list: the
+  model's average cost per request divided into what is left. For a balance
+  (DeepSeek) "what is left" is the balance. For a plan it is priced from the
+  window itself — if 20% of the month cost $0.08, the remaining 80% is worth
+  about $0.32 — and it is left out entirely when less than 5% of a window has
+  been used, because there is nothing to extrapolate from yet. A model you have
+  not run says `not used yet` rather than guessing from another model's price.
 - The breakdown is read from OpenCode's own database
   (`~/.local/share/opencode/opencode.db`, read-only): every assistant message it
   stores carries the model, the provider it was billed to, input/output/cache

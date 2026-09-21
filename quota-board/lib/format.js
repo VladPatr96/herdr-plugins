@@ -129,33 +129,47 @@ function cacheShare(usage) {
 }
 
 // The one line that stands for a provider's spend in the window.
-function usageSummary(usage) {
+function usageSummary(usage, budget = null) {
   if (!usage || !usage.requests) return null;
   const parts = [`${usage.requests} req`, money(usage.cost)];
   const share = cacheShare(usage);
   if (share !== null) parts.push(`${share}% cached`);
+  // What the rest of the window is worth, priced by what this one cost.
+  if (budget && budget.basis !== 'balance') parts.push(`~${money(budget.amount)} left`);
   return `${usage.days}d: ${parts.join(' · ')}`;
 }
 
 // Columns are dropped from the right as the pane narrows: the cost and the
 // cache share are what the row is for, the raw in/out counts are detail.
-function modelLine(model, { nameWidth = 24, width = 0 } = {}) {
+// One line per model. `estimate` is roughly how many more requests the
+// remaining quota would pay for at this model's own average cost, so it is
+// always marked with ~. Columns are added while they fit, in the order they
+// matter: what it is, how much is left of it, what it cost, then the detail.
+function modelLine(model, { nameWidth = 24, width = 0, estimate = null } = {}) {
   const share = cacheShare(model);
-  const columns = [
-    model.model.padEnd(nameWidth),
-    `${String(model.requests).padStart(4)} req`,
+  const used = model.requests > 0;
+  const name = model.model.padEnd(nameWidth);
+  if (!used) {
+    const line = `${name}  not used yet`;
+    return width ? line.slice(0, width) : line;
+  }
+
+  const optional = [
+    estimate === null ? null : `~${estimate} more`,
     money(model.cost).padStart(8),
+    `${String(model.requests).padStart(4)} req`,
+    `cache ${tokens(model.cacheRead).padStart(5)}${share === null ? '' : ` (${share}%)`}`,
     `in ${tokens(model.input).padStart(5)}`,
     `out ${tokens(model.output).padStart(5)}`,
-    `cache ${tokens(model.cacheRead).padStart(5)}${share === null ? '' : ` (${share}%)`}`,
-  ];
-  if (!width) return columns.join('  ');
-  // Keep name, requests, cost and cache; drop in/out first if it does not fit.
-  const full = columns.join('  ');
-  if (full.length <= width) return full;
-  const short = [columns[0], columns[1], columns[2], columns[5]].join('  ');
-  if (short.length <= width) return short;
-  return [columns[0], columns[2], columns[5]].join('  ').slice(0, width);
+  ].filter(Boolean);
+
+  let line = name;
+  for (const column of optional) {
+    const candidate = `${line}  ${column}`;
+    if (width && candidate.length > width) break;
+    line = candidate;
+  }
+  return line;
 }
 
 const STATE_NOTES = {

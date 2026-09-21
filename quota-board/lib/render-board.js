@@ -4,6 +4,7 @@
 // terminal. Colour is optional for the same reason.
 
 const { paint, windowLine, balanceLine, clock, resetAt, countdown, usageSummary, modelLine, STATE_NOTES } = require('./format');
+const { remainingBudget, estimateRequests } = require('./estimate');
 
 const LABEL_WIDTH = 18;
 const MIN_TEXT_WIDTH = 24;
@@ -73,7 +74,8 @@ function providerBlock(snapshot, { color = true, now, width = 80, labelWidth, re
 
   // What this provider actually spent locally, and — folded away unless asked
   // for — the same split per model.
-  const spend = usageSummary(snapshot.usage);
+  const budget = remainingBudget(snapshot);
+  const spend = usageSummary(snapshot.usage, budget);
   if (spend) extras.push(models ? spend : `${spend}  [m]`);
 
   rows.forEach((row, index) => {
@@ -83,22 +85,18 @@ function providerBlock(snapshot, { color = true, now, width = 80, labelWidth, re
   for (const line of extras.length ? wrap(extras.join(' · '), textWidth) : []) {
     lines.push(`${' '.repeat(LABEL_WIDTH)} ${paint(line, 'grey', color)}`);
   }
-  if (models && snapshot.usage?.models?.length) {
-    const nameWidth = Math.max(...snapshot.usage.models.map((model) => model.model.length));
-    for (const model of snapshot.usage.models) {
-      const room = Math.max(MIN_TEXT_WIDTH, width - LABEL_WIDTH - 3);
-      lines.push(`${' '.repeat(LABEL_WIDTH + 2)} ${paint(modelLine(model, { nameWidth, width: room }), 'grey', color)}`);
-    }
-  }
-  // What the plan may run but you have not: the rest of its catalog.
-  if (models && snapshot.catalog?.length) {
-    const used = new Set((snapshot.usage?.models || []).map((model) => model.model));
-    const rest = snapshot.catalog.filter((model) => !used.has(model));
-    const text = rest.length
-      ? `also available (${rest.length} of ${snapshot.catalog.length}): ${rest.join(', ')}`
-      : `available (${snapshot.catalog.length}): all of them used`;
-    for (const line of wrap(text, Math.max(MIN_TEXT_WIDTH, width - LABEL_WIDTH - 3))) {
-      lines.push(`${' '.repeat(LABEL_WIDTH + 2)} ${paint(line, 'grey', color)}`);
+  if (models && (snapshot.usage?.models?.length || snapshot.catalog?.length)) {
+    const spent = snapshot.usage?.models || [];
+    const used = new Set(spent.map((model) => model.model));
+    // Every model the plan can run gets its own row: the ones with history
+    // first, carrying their numbers, then the rest of the catalog.
+    const rest = (snapshot.catalog || []).filter((model) => !used.has(model)).map((model) => ({ model, requests: 0 }));
+    const rows = [...spent, ...rest];
+    const nameWidth = Math.max(...rows.map((row) => row.model.length));
+    const room = Math.max(MIN_TEXT_WIDTH, width - LABEL_WIDTH - 3);
+    for (const row of rows) {
+      const estimate = row.requests ? estimateRequests(row, budget) : null;
+      lines.push(`${' '.repeat(LABEL_WIDTH + 2)} ${paint(modelLine(row, { nameWidth, width: room, estimate }), 'grey', color)}`);
     }
   }
   return lines;
