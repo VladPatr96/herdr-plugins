@@ -80,10 +80,11 @@ Reload with `herdr server reload-config`.
 
 - `open` is an overlay: it zooms over the active pane and gives the focus back
   when you close it with `q`.
-- `open-side` splits the current pane and puts the board to the right, where
-  the agents are. It is an ordinary Herdr pane, so it stays until you close it,
-  and pressing the key again focuses the board that is already open instead of
-  splitting another one.
+- `open-side` splits the pane you pressed the key in and puts the board to its
+  right, so it works next to any agent, in any workspace. It is an ordinary
+  Herdr pane and stays until you close it; pressing the key again focuses the
+  board already open **in that workspace** rather than splitting another one,
+  and a workspace without one gets its own.
 
 ## Where the numbers come from
 
