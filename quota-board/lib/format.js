@@ -137,16 +137,25 @@ function usageSummary(usage) {
   return `${usage.days}d: ${parts.join(' · ')}`;
 }
 
-function modelLine(model, { nameWidth = 24 } = {}) {
+// Columns are dropped from the right as the pane narrows: the cost and the
+// cache share are what the row is for, the raw in/out counts are detail.
+function modelLine(model, { nameWidth = 24, width = 0 } = {}) {
   const share = cacheShare(model);
-  return [
+  const columns = [
     model.model.padEnd(nameWidth),
     `${String(model.requests).padStart(4)} req`,
     money(model.cost).padStart(8),
     `in ${tokens(model.input).padStart(5)}`,
     `out ${tokens(model.output).padStart(5)}`,
     `cache ${tokens(model.cacheRead).padStart(5)}${share === null ? '' : ` (${share}%)`}`,
-  ].join('  ');
+  ];
+  if (!width) return columns.join('  ');
+  // Keep name, requests, cost and cache; drop in/out first if it does not fit.
+  const full = columns.join('  ');
+  if (full.length <= width) return full;
+  const short = [columns[0], columns[1], columns[2], columns[5]].join('  ');
+  if (short.length <= width) return short;
+  return [columns[0], columns[2], columns[5]].join('  ').slice(0, width);
 }
 
 const STATE_NOTES = {

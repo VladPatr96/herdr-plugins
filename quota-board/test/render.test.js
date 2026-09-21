@@ -148,3 +148,28 @@ test('opened, it lists every model with cost, tokens and cache', () => {
   assert.match(opened, /m hide models/);
   assert.doesNotMatch(opened, /\[m\]/);
 });
+
+test('the catalog lists what the plan can run but you have not', () => {
+  const provider = {
+    id: 'opencode-go',
+    label: 'OpenCode Go',
+    state: 'ok',
+    windows: [{ label: '30d', usedPercent: 20, resetsAt: null }],
+    catalog: ['glm-5.2', 'kimi-k3', 'minimax-m3'],
+    usage: {
+      days: 30,
+      requests: 4,
+      cost: 0.01,
+      input: 100,
+      cacheRead: 900,
+      models: [{ model: 'glm-5.2', requests: 4, cost: 0.01, input: 100, output: 20, cacheRead: 900, cacheWrite: 0 }],
+    },
+  };
+  const opened = renderBoard({ providers: [provider], updatedAt: NOW, color: false, now: NOW, models: true }).join('\n');
+  assert.match(opened, /also available \(2 of 3\)/);
+  assert.match(opened, /kimi-k3/);
+  assert.doesNotMatch(opened, /also available[^\n]*glm-5\.2/, 'a model already listed above is not repeated');
+
+  const folded = renderBoard({ providers: [provider], updatedAt: NOW, color: false, now: NOW, models: false }).join('\n');
+  assert.doesNotMatch(folded, /also available/, 'the catalog is part of the fold');
+});

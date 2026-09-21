@@ -86,7 +86,19 @@ function providerBlock(snapshot, { color = true, now, width = 80, labelWidth, re
   if (models && snapshot.usage?.models?.length) {
     const nameWidth = Math.max(...snapshot.usage.models.map((model) => model.model.length));
     for (const model of snapshot.usage.models) {
-      lines.push(`${' '.repeat(LABEL_WIDTH + 2)} ${paint(modelLine(model, { nameWidth }), 'grey', color)}`);
+      const room = Math.max(MIN_TEXT_WIDTH, width - LABEL_WIDTH - 3);
+      lines.push(`${' '.repeat(LABEL_WIDTH + 2)} ${paint(modelLine(model, { nameWidth, width: room }), 'grey', color)}`);
+    }
+  }
+  // What the plan may run but you have not: the rest of its catalog.
+  if (models && snapshot.catalog?.length) {
+    const used = new Set((snapshot.usage?.models || []).map((model) => model.model));
+    const rest = snapshot.catalog.filter((model) => !used.has(model));
+    const text = rest.length
+      ? `also available (${rest.length} of ${snapshot.catalog.length}): ${rest.join(', ')}`
+      : `available (${snapshot.catalog.length}): all of them used`;
+    for (const line of wrap(text, Math.max(MIN_TEXT_WIDTH, width - LABEL_WIDTH - 3))) {
+      lines.push(`${' '.repeat(LABEL_WIDTH + 2)} ${paint(line, 'grey', color)}`);
     }
   }
   return lines;

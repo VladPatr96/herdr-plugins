@@ -11,7 +11,7 @@ platforms = ["linux", "macos", "windows"]
 id = "board"
 title = "AI quota"
 placement = "overlay"
-command = ["node", "bin/board.js"]
+command = ["node", "--no-warnings", "bin/board.js"]
 
 # The same board as a normal pane, split off to the right where the agents are.
 # It stays until you close it, so opening it again focuses this one.
@@ -19,7 +19,7 @@ command = ["node", "bin/board.js"]
 id = "board-side"
 title = "AI quota"
 placement = "split"
-command = ["node", "bin/board.js"]
+command = ["node", "--no-warnings", "bin/board.js"]
 
 [[actions]]
 id = "open"
@@ -37,7 +37,7 @@ command = ["node", "bin/open.js", "side"]
 id = "refresh"
 title = "Quota Board: refresh quota"
 contexts = ["workspace", "global"]
-command = ["node", "bin/refresh.js"]
+command = ["node", "--no-warnings", "bin/refresh.js"]
 
 [[actions]]
 id = "install-statusline"
@@ -53,19 +53,19 @@ command = ["node", "bin/install-statusline.js", "--uninstall"]
 
 # Warm the cache when the server starts, so the window opens with numbers.
 [[startup]]
-command = ["node", "bin/refresh.js"]
+command = ["node", "--no-warnings", "bin/refresh.js"]
 
 # Refresh while you work: a turn on any agent — a different model, a different
 # harness — updates the quota behind it. `--if-stale` keeps that to one request
 # per TTL (QUOTA_BOARD_TTL_SECONDS, default 120s) however often events fire.
 [[events]]
 on = "pane.agent_detected"
-command = ["node", "bin/refresh.js", "--if-stale"]
+command = ["node", "--no-warnings", "bin/refresh.js", "--if-stale"]
 
 [[events]]
 on = "pane.agent_status_changed"
-command = ["node", "bin/refresh.js", "--if-stale"]
+command = ["node", "--no-warnings", "bin/refresh.js", "--if-stale"]
 
 [[events]]
 on = "pane.exited"
-command = ["node", "bin/refresh.js", "--if-stale"]
+command = ["node", "--no-warnings", "bin/refresh.js", "--if-stale"]
