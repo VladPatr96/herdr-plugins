@@ -51,7 +51,7 @@ function resetColumn(providers, now) {
   return widths.length ? Math.max(...widths) : 0;
 }
 
-function providerBlock(snapshot, { color = true, now, width = 80, labelWidth, resetWidth = 0, models = false } = {}) {
+function providerBlock(snapshot, { color = true, now, width = 80, labelWidth, resetWidth = 0, models = false, catalog = false } = {}) {
   const lines = [];
   const label = snapshot.label.padEnd(LABEL_WIDTH);
   const textWidth = Math.max(MIN_TEXT_WIDTH, width - LABEL_WIDTH - 1);
@@ -85,18 +85,23 @@ function providerBlock(snapshot, { color = true, now, width = 80, labelWidth, re
   for (const line of extras.length ? wrap(extras.join(' · '), textWidth) : []) {
     lines.push(`${' '.repeat(LABEL_WIDTH)} ${paint(line, 'grey', color)}`);
   }
-  if (models && (snapshot.usage?.models?.length || snapshot.catalog?.length)) {
+  if (models) {
     const spent = snapshot.usage?.models || [];
     const used = new Set(spent.map((model) => model.model));
-    // Every model the plan can run gets its own row: the ones with history
-    // first, carrying their numbers, then the rest of the catalog.
+    // Models with history first, each with its own numbers. The rest of the
+    // catalog is a second fold: it is a long list with nothing to say yet.
     const rest = (snapshot.catalog || []).filter((model) => !used.has(model)).map((model) => ({ model, requests: 0 }));
-    const rows = [...spent, ...rest];
-    const nameWidth = Math.max(...rows.map((row) => row.model.length));
-    const room = Math.max(MIN_TEXT_WIDTH, width - LABEL_WIDTH - 3);
-    for (const row of rows) {
-      const estimate = row.requests ? estimateRequests(row, budget) : null;
-      lines.push(`${' '.repeat(LABEL_WIDTH + 2)} ${paint(modelLine(row, { nameWidth, width: room, estimate }), 'grey', color)}`);
+    const rows = catalog ? [...spent, ...rest] : spent;
+    if (rows.length) {
+      const nameWidth = Math.max(...rows.map((row) => row.model.length));
+      const room = Math.max(MIN_TEXT_WIDTH, width - LABEL_WIDTH - 3);
+      for (const row of rows) {
+        const estimate = row.requests ? estimateRequests(row, budget) : null;
+        lines.push(`${' '.repeat(LABEL_WIDTH + 2)} ${paint(modelLine(row, { nameWidth, width: room, estimate }), 'grey', color)}`);
+      }
+    }
+    if (!catalog && rest.length) {
+      lines.push(`${' '.repeat(LABEL_WIDTH + 2)} ${paint(`${rest.length} more the plan can run  [a]`, 'grey', color)}`);
     }
   }
   return lines;
@@ -112,7 +117,7 @@ function updatedLabel(updatedAt, now = Math.floor(Date.now() / 1000)) {
   return `updated ${at} · ${Math.floor(minutes / 60)}h ${minutes % 60}m ago`;
 }
 
-function renderBoard({ providers, updatedAt, busy = false, color = true, now, width = 80, models = false }) {
+function renderBoard({ providers, updatedAt, busy = false, color = true, now, width = 80, models = false, catalog = false }) {
   const lines = [];
   const subtitle = width >= 60 ? '  ·  every subscription and API you run in Herdr' : '';
   lines.push(paint('AI quota', 'bold', color) + paint(subtitle, 'grey', color));
@@ -120,12 +125,18 @@ function renderBoard({ providers, updatedAt, busy = false, color = true, now, wi
   const labelWidth = labelColumn(providers);
   const resetWidth = resetColumn(providers, now);
   for (const snapshot of providers) {
-    lines.push(...providerBlock(snapshot, { color, now, width, labelWidth, resetWidth, models }));
+    lines.push(...providerBlock(snapshot, { color, now, width, labelWidth, resetWidth, models, catalog }));
     lines.push('');
   }
   const status = busy ? 'refreshing…' : updatedLabel(updatedAt, now);
   const hasModels = providers.some((snapshot) => snapshot.usage?.models?.length);
-  const keys = ['r refresh', hasModels ? `m ${models ? 'hide' : 'show'} models` : null, 'q close'].filter(Boolean);
+  const hasCatalog = providers.some((snapshot) => snapshot.catalog?.length);
+  const keys = [
+    'r refresh',
+    hasModels ? `m ${models ? 'hide' : 'show'} models` : null,
+    models && hasCatalog ? `a ${catalog ? 'hide' : 'show'} catalog` : null,
+    'q close',
+  ].filter(Boolean);
   lines.push(paint(`${status}   ${keys.join('   ')}`, 'grey', color));
   return lines;
 }

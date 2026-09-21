@@ -165,10 +165,16 @@ test('the catalog is listed row by row, used or not', () => {
       models: [{ model: 'glm-5.2', requests: 4, cost: 0.01, input: 100, output: 20, cacheRead: 900, cacheWrite: 0 }],
     },
   };
-  const opened = renderBoard({ providers: [provider], updatedAt: NOW, color: false, now: NOW, models: true, width: 110 }).join('\n');
-  const rows = opened.split('\n').filter((line) => /kimi-k3|minimax-m3|glm-5\.2/.test(line));
+  const models = renderBoard({ providers: [provider], updatedAt: NOW, color: false, now: NOW, models: true, width: 110 }).join('\n');
+  assert.match(models, /glm-5\.2/, 'a model with history is listed');
+  assert.doesNotMatch(models, /kimi-k3/, 'the rest of the catalog is a second fold');
+  assert.match(models, /2 more the plan can run\s+\[a\]/);
+  assert.match(models, /a show catalog/);
+
+  const withCatalog = renderBoard({ providers: [provider], updatedAt: NOW, color: false, now: NOW, models: true, catalog: true, width: 110 }).join('\n');
+  const rows = withCatalog.split('\n').filter((line) => /kimi-k3|minimax-m3|glm-5\.2/.test(line));
   assert.strictEqual(rows.length, 3, 'one row per model in the catalog, used or not');
-  assert.match(opened, /kimi-k3\s+not used yet/);
+  assert.match(withCatalog, /kimi-k3\s+not used yet/);
   assert.strictEqual(rows.filter((line) => line.includes('glm-5.2')).length, 1, 'a used model is not repeated below');
 
   const folded = renderBoard({ providers: [provider], updatedAt: NOW, color: false, now: NOW, models: false }).join('\n');
@@ -193,7 +199,7 @@ test('each model gets its own row, with what is left of it', () => {
       models: [{ model: 'glm-5.2', requests: 63, cost: 0.08, input: 195_000, output: 45_000, cacheRead: 4_100_000, cacheWrite: 0 }],
     },
   };
-  const opened = renderBoard({ providers: [provider], updatedAt: NOW, color: false, now: NOW, models: true, width: 110 }).join('\n');
+  const opened = renderBoard({ providers: [provider], updatedAt: NOW, color: false, now: NOW, models: true, catalog: true, width: 110 }).join('\n');
   assert.match(opened, /~\$0\.32 left/, 'the window left is priced from what the used share cost');
   assert.match(opened, /glm-5\.2\s+~\d+ more/, 'a used model says how many more requests it is worth');
   assert.match(opened, /kimi-k3\s+not used yet/, 'a model with no history says so instead of guessing');

@@ -27,21 +27,35 @@ const state = {
   view: cachedOrEmpty(),
   timer: null,
   models: readJson(modelsFile())?.models === true,
+  catalog: readJson(modelsFile())?.catalog === true,
 };
 
-function toggleModels() {
-  state.models = !state.models;
+function remember() {
   try {
-    writeJsonAtomic(modelsFile(), { models: state.models });
+    writeJsonAtomic(modelsFile(), { models: state.models, catalog: state.catalog });
   } catch {
     /* a preference not surviving the session is not worth an error */
   }
+}
+
+function toggleModels() {
+  state.models = !state.models;
+  remember();
+  draw();
+}
+
+// The catalog only makes sense inside the model fold, so asking for it opens
+// that fold too.
+function toggleCatalog() {
+  state.catalog = !state.catalog;
+  if (state.catalog) state.models = true;
+  remember();
   draw();
 }
 
 function draw() {
   const width = process.stdout.columns || 80;
-  const lines = renderBoard({ ...state.view, busy: state.busy, color: true, width, models: state.models });
+  const lines = renderBoard({ ...state.view, busy: state.busy, color: true, width, models: state.models, catalog: state.catalog });
   process.stdout.write('\u001b[2J\u001b[H');
   process.stdout.write(lines.join('\r\n'));
 }
@@ -81,6 +95,7 @@ function main() {
     process.stdin.on('data', (key) => {
       if (key === 'r' || key === 'R') refresh();
       else if (key === 'm' || key === 'M') toggleModels();
+      else if (key === 'a' || key === 'A') toggleCatalog();
       // q, Esc, Ctrl+C, Ctrl+D all close the window.
       else if (key === 'q' || key === 'Q' || key === '\u001b' || key === '\u0003' || key === '\u0004') quit();
     });

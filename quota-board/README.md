@@ -34,8 +34,9 @@ updated 12s ago   r refresh   q close
 - **What the spend went on, and what is left of it.** For the providers
   OpenCode records, a folded line shows the last 30 days — requests, cost, and
   how much of the input came back from the prompt cache. Press `m` to unfold it
-  into one row per model, each with roughly how many more requests of that
-  model the remaining quota is worth.
+  into one row per model you have actually used, each with roughly how many
+  more requests of that model the remaining quota is worth; `a` adds the rest
+  of the plan's catalog.
 - **A provider without data says so.** No credentials, no setup, an endpoint
   that refused — the row says which. It never shows a number it does not have.
 - **Works on Windows, Linux and macOS.** Node.js only, no dependencies, no build.
@@ -154,8 +155,9 @@ bridge is what keeps the two plan-wide windows visible when it does.
 
 - `bin/board.js` is the window. It draws from the cache immediately, refreshes
   in the background, repeats every 60 seconds (`QUOTA_BOARD_INTERVAL_SECONDS`),
-  redraws on `r`, and folds the per-model breakdown out and back on `m`. That
-  fold is remembered between openings.
+  redraws on `r`, folds the per-model breakdown out and back on `m`, and adds
+  the models you have not used on `a`. Both folds are remembered between
+  openings.
 - `~450 more` is an estimate from your own history, never a price list: the
   model's average cost per request divided into what is left. For a balance
   (DeepSeek) "what is left" is the balance. For a plan it is priced from the
