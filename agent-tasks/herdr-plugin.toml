@@ -1,0 +1,87 @@
+id = "vladpatr96.agent-tasks"
+name = "Agent Tasks"
+version = "0.1.0"
+min_herdr_version = "0.9.1"
+description = "Give a task to a whole agent session, not a subagent: it opens in its own Herdr tab with its task, its status and its plan in the sidebar, and you can step into it and keep talking."
+platforms = ["linux", "macos", "windows"]
+
+# The board: every launched agent with its task, status and checklist.
+# Overlay keeps it transient — it zooms over the active pane and gives focus
+# back when it closes.
+[[panes]]
+id = "board"
+title = "Агенты и задачи"
+placement = "overlay"
+command = ["node", "--no-warnings", "bin/board.js"]
+
+# The same board as a normal pane, split off to the right where the agents are.
+[[panes]]
+id = "board-side"
+title = "Агенты и задачи"
+placement = "split"
+command = ["node", "--no-warnings", "bin/board.js"]
+
+[[actions]]
+id = "open"
+title = "Agent Tasks: open the board"
+contexts = ["workspace", "global"]
+command = ["node", "bin/open.js"]
+
+[[actions]]
+id = "open-side"
+title = "Agent Tasks: open the board in a side pane"
+contexts = ["workspace", "global"]
+command = ["node", "bin/open.js", "side"]
+
+# Manual resync; also needed right after `herdr plugin link`, which runs no
+# startup hooks.
+[[actions]]
+id = "sync"
+title = "Agent Tasks: sync the sidebar"
+contexts = ["workspace", "global"]
+command = ["node", "bin/sync.js"]
+
+# A Claude Code session cannot find a plugin on its own, so the skill is
+# installed with this plugin's path already in it.
+[[actions]]
+id = "install-skill"
+title = "Agent Tasks: install the /zapustit-agenta skill for Claude Code"
+contexts = ["workspace", "global"]
+command = ["node", "bin/install-skill.js"]
+
+[[actions]]
+id = "remove-skill"
+title = "Agent Tasks: remove the /zapustit-agenta skill"
+contexts = ["workspace", "global"]
+command = ["node", "bin/install-skill.js", "--uninstall"]
+
+# Token metadata is not restored after a server restart, so label again on
+# start. This also drops agents whose pane is gone.
+[[startup]]
+command = ["node", "bin/sync.js"]
+
+# The task and the plan change while the agent works; the status is Herdr's own
+# and arrives here as an event.
+[[events]]
+on = "pane.agent_detected"
+command = ["node", "bin/sync.js"]
+
+[[events]]
+on = "pane.agent_status_changed"
+command = ["node", "bin/sync.js"]
+
+[[events]]
+on = "pane.exited"
+command = ["node", "bin/sync.js"]
+
+[[events]]
+on = "pane.closed"
+command = ["node", "bin/sync.js"]
+
+[[events]]
+on = "tab.closed"
+command = ["node", "bin/sync.js"]
+
+[[events]]
+on = "workspace.closed"
+command = ["node", "bin/sync.js"]
