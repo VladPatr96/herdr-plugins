@@ -3,7 +3,7 @@
 // The board's text, built as an array of lines so it can be tested without a
 // terminal. Colour is optional for the same reason.
 
-const { paint, windowLine, balanceLine, clock, STATE_NOTES } = require('./format');
+const { paint, windowLine, balanceLine, clock, resetAt, countdown, STATE_NOTES } = require('./format');
 
 const LABEL_WIDTH = 18;
 const MIN_TEXT_WIDTH = 24;
@@ -33,7 +33,24 @@ function stateText(snapshot) {
   return snapshot.note ? `${summary}: ${snapshot.note}` : summary;
 }
 
-function providerBlock(snapshot, { color = true, now, width = 80 } = {}) {
+// The widest window name on the board, so every bar starts in the same column
+// whatever the provider. Names longer than this are rare and simply push their
+// own row; they do not move anyone else's.
+function labelColumn(providers) {
+  const names = providers.flatMap((snapshot) => (snapshot.windows || []).map((window) => window.label.length));
+  return Math.max(8, ...names);
+}
+
+// Same idea for the clock column: "resets 17:20" and "resets пт 10:00" are
+// different lengths, and without padding the countdowns zigzag.
+function resetColumn(providers, now) {
+  const widths = providers.flatMap((snapshot) => (snapshot.windows || [])
+    .filter((window) => countdown(window.resetsAt, now))
+    .map((window) => (resetAt(window.resetsAt, now) || '').length));
+  return widths.length ? Math.max(...widths) : 0;
+}
+
+function providerBlock(snapshot, { color = true, now, width = 80, labelWidth, resetWidth = 0 } = {}) {
   const lines = [];
   const label = snapshot.label.padEnd(LABEL_WIDTH);
   const textWidth = Math.max(MIN_TEXT_WIDTH, width - LABEL_WIDTH - 1);
@@ -42,7 +59,8 @@ function providerBlock(snapshot, { color = true, now, width = 80 } = {}) {
   if (snapshot.state === 'ok' && snapshot.balance) {
     rows.push(balanceLine(snapshot.balance, { color }));
   } else if (snapshot.state === 'ok' && (snapshot.windows || []).length) {
-    for (const window of snapshot.windows) rows.push(windowLine(window, { color, now }));
+    const column = labelWidth || Math.max(8, ...snapshot.windows.map((window) => window.label.length));
+    for (const window of snapshot.windows) rows.push(windowLine(window, { color, now, labelWidth: column, resetWidth }));
   } else {
     const tone = snapshot.state === 'error' ? 'red' : 'grey';
     for (const line of wrap(stateText(snapshot), textWidth)) rows.push(paint(line, tone, color));
@@ -78,8 +96,10 @@ function renderBoard({ providers, updatedAt, busy = false, color = true, now, wi
   const subtitle = width >= 60 ? '  ·  every subscription and API you run in Herdr' : '';
   lines.push(paint('AI quota', 'bold', color) + paint(subtitle, 'grey', color));
   lines.push('');
+  const labelWidth = labelColumn(providers);
+  const resetWidth = resetColumn(providers, now);
   for (const snapshot of providers) {
-    lines.push(...providerBlock(snapshot, { color, now, width }));
+    lines.push(...providerBlock(snapshot, { color, now, width, labelWidth, resetWidth }));
     lines.push('');
   }
   const status = busy ? 'refreshing…' : updatedLabel(updatedAt, now);

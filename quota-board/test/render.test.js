@@ -73,3 +73,41 @@ test('a long reason wraps at the pane width instead of breaking a word', () => {
   assert.ok(body.length >= 2, 'the reason takes more than one line');
   for (const line of lines) assert.ok(line.length <= 56, `line too wide: ${line}`);
 });
+
+test('every bar starts in the same column, whatever the provider', () => {
+  const lines = renderBoard({
+    providers: [
+      { id: 'grok', label: 'Grok', state: 'ok', windows: [{ label: '7d', usedPercent: 0, resetsAt: null }] },
+      {
+        id: 'agy',
+        label: 'agy',
+        state: 'ok',
+        windows: [
+          { label: '5h Claude/GPT', usedPercent: 0, resetsAt: null },
+          { label: '7d Gemini', usedPercent: 26, resetsAt: null },
+        ],
+      },
+    ],
+    updatedAt: NOW,
+    color: false,
+    now: NOW,
+  });
+  const columns = lines.filter((line) => line.includes('█')).map((line) => line.indexOf('█'));
+  assert.ok(columns.length >= 3, 'all three windows drew a bar');
+  assert.strictEqual(new Set(columns).size, 1, `bars start at ${[...new Set(columns)].join(', ')}`);
+});
+
+test('the countdowns line up too, whatever the clock time looks like', () => {
+  const lines = renderBoard({
+    providers: [
+      { id: 'a', label: 'Same day', state: 'ok', windows: [{ label: '5h', usedPercent: 10, resetsAt: NOW + 3600 }] },
+      { id: 'b', label: 'Next week', state: 'ok', windows: [{ label: '7d', usedPercent: 10, resetsAt: NOW + 5 * 86400 }] },
+    ],
+    updatedAt: NOW,
+    color: false,
+    now: NOW,
+  });
+  const columns = lines.filter((line) => line.includes('· in ')).map((line) => line.indexOf('· in '));
+  assert.strictEqual(columns.length, 2);
+  assert.strictEqual(new Set(columns).size, 1, `countdowns start at ${[...new Set(columns)].join(', ')}`);
+});

@@ -57,26 +57,43 @@ function weekday(unixSeconds) {
   return new Date(unixSeconds * 1000).toLocaleDateString([], { weekday: 'short' });
 }
 
-// Same day: the time is enough. Further out: the weekday carries it, and the
-// countdown stays because "in 3d" is what you actually plan around.
-function resetIn(resetsAt, now = Math.floor(Date.now() / 1000)) {
+// Same day: the time is enough. Further out: the weekday carries it.
+function resetAt(resetsAt, now = Math.floor(Date.now() / 1000)) {
   if (!Number.isFinite(resetsAt)) return null;
-  const left = duration(resetsAt - now);
-  if (!left) return 'resets now';
+  if (resetsAt - now <= 0) return 'resets now';
   const sameDay = new Date(resetsAt * 1000).toDateString() === new Date(now * 1000).toDateString();
-  const when = sameDay ? clock(resetsAt) : `${weekday(resetsAt)} ${clock(resetsAt)}`;
-  return `resets ${when} · in ${left}`;
+  return `resets ${sameDay ? clock(resetsAt) : `${weekday(resetsAt)} ${clock(resetsAt)}`}`;
 }
 
-function windowLine(window, { color = true, now } = {}) {
+// The countdown stays beside the clock time, because "in 3d" is what you plan
+// around. Kept apart from resetAt so both columns can be padded to line up.
+function countdown(resetsAt, now = Math.floor(Date.now() / 1000)) {
+  if (!Number.isFinite(resetsAt)) return null;
+  const left = duration(resetsAt - now);
+  return left ? `in ${left}` : null;
+}
+
+function resetIn(resetsAt, now = Math.floor(Date.now() / 1000)) {
+  const at = resetAt(resetsAt, now);
+  if (!at) return null;
+  const left = countdown(resetsAt, now);
+  return left ? `${at} · ${left}` : at;
+}
+
+function windowLine(window, { color = true, now, labelWidth = 8, resetWidth = 0 } = {}) {
   const left = leftPercent(window.usedPercent);
   const parts = [
-    window.label.padEnd(8),
+    window.label.padEnd(labelWidth),
     bar(left, 10, color),
     `${String(Math.round(left)).padStart(3)}% left`,
   ];
-  const reset = resetIn(window.resetsAt, now);
-  if (reset) parts.push(paint(`· ${reset}`, 'grey', color));
+  const at = resetAt(window.resetsAt, now);
+  const left_time = countdown(window.resetsAt, now);
+  if (at) {
+    // Pad the clock column so the countdowns of every row start together.
+    const padded = left_time ? at.padEnd(resetWidth) : at;
+    parts.push(paint(`· ${padded}${left_time ? ` · ${left_time}` : ''}`, 'grey', color));
+  }
   if (window.degraded) parts.push(paint(`· ${window.degraded}`, 'yellow', color));
   return parts.join(' ');
 }
@@ -102,6 +119,8 @@ module.exports = {
   bar,
   duration,
   resetIn,
+  resetAt,
+  countdown,
   windowLine,
   balanceLine,
   STATE_NOTES,
