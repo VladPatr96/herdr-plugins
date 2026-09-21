@@ -5,41 +5,100 @@
 // inside `agy` (`/statusline`). Until then this row says so instead of
 // inventing a number.
 
+const path = require('node:path');
 const statusline = require('../statusline-store');
 const { clock } = require('../format');
+const { home, readJson, resolveDir } = require('../runtime');
 
-const POOL_LABELS = {
+// agy names its pools differently depending on the build, and a pool can be
+// per-model. Everything below maps what it sent onto "<window> <model>" without
+// inventing either half: a key that is not recognised is printed as it came.
+const WINDOW_LABELS = {
   five_hour: '5h',
+  fivehour: '5h',
+  '5h': '5h',
+  hourly: '1h',
+  session: '5h',
   weekly: '7d',
+  seven_day: '7d',
+  sevenday: '7d',
+  '7d': '7d',
   weekly_native: '7d gemini',
   weekly_third_party: '7d other',
+  native: 'gemini',
+  third_party: 'other',
   monthly: '30d',
+  '30d': '30d',
+  daily: '1d',
 };
 
+function normalize(key) {
+  return String(key).toLowerCase().replace(/[\s-]+/g, '_');
+}
+
+function labelFor(key) {
+  const normalized = normalize(key);
+  return WINDOW_LABELS[normalized] || String(key).replace(/_/g, ' ');
+}
+
+// Percentages arrive as used or as remaining, flat or wrapped in a bucket.
+function usedPercentOf(value) {
+  if (typeof value === 'number') return value;
+  if (!value || typeof value !== 'object') return null;
+  for (const key of ['used_percentage', 'usedPercent', 'used_percent', 'percent', 'utilization']) {
+    if (typeof value[key] === 'number') return value[key];
+  }
+  for (const key of ['remaining_percentage', 'remainingPercent', 'percent_remaining']) {
+    if (typeof value[key] === 'number') return 100 - value[key];
+  }
+  return null;
+}
+
+function resetOf(value) {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value.resets_at ?? value.resetsAt ?? value.reset_time ?? value.resetTime ?? null;
+  if (raw === null) return null;
+  const seconds = typeof raw === 'number' ? raw : Date.parse(raw) / 1000;
+  return Number.isFinite(seconds) ? seconds : null;
+}
+
+function modelNameOf(value, fallback) {
+  if (value && typeof value === 'object') {
+    for (const key of ['display_name', 'displayName', 'model', 'name', 'label']) {
+      if (typeof value[key] === 'string' && value[key].trim()) return value[key].trim();
+    }
+  }
+  return fallback;
+}
+
+// A quota block is one of two shapes: window → bucket, or model → windows.
+// Both end up as one row per (window, model) pair.
 function parseQuota(quota) {
   const windows = [];
   for (const [key, value] of Object.entries(quota || {})) {
     if (!value || typeof value !== 'object') continue;
-    const used = typeof value.used_percentage === 'number'
-      ? value.used_percentage
-      : typeof value.usedPercent === 'number'
-        ? value.usedPercent
-        : typeof value.remaining_percentage === 'number'
-          ? 100 - value.remaining_percentage
-          : null;
-    if (used === null) continue;
-    const rawReset = value.resets_at ?? value.resetsAt ?? null;
-    const reset = typeof rawReset === 'number' ? rawReset : rawReset ? Date.parse(rawReset) / 1000 : null;
-    windows.push({
-      label: POOL_LABELS[key] || key.replace(/_/g, ' '),
-      usedPercent: used,
-      resetsAt: Number.isFinite(reset) ? reset : null,
-    });
+
+    const direct = usedPercentOf(value);
+    if (direct !== null) {
+      const model = modelNameOf(value, null);
+      const label = model && normalize(key) !== normalize(model) ? `${labelFor(key)} ${model}` : labelFor(key);
+      windows.push({ label, usedPercent: direct, resetsAt: resetOf(value) });
+      continue;
+    }
+
+    // Nested: this key names a model (or a pool) and holds its own windows.
+    const group = modelNameOf(value, key);
+    for (const [innerKey, innerValue] of Object.entries(value)) {
+      const used = usedPercentOf(innerValue);
+      if (used === null) continue;
+      const groupLabel = labelFor(group);
+      const windowLabel = labelFor(innerKey);
+      const label = groupLabel === windowLabel ? windowLabel : `${windowLabel} ${groupLabel}`;
+      windows.push({ label, usedPercent: used, resetsAt: resetOf(innerValue) });
+    }
   }
   return windows;
 }
-
-const SETUP_HINT = 'run `/statusline node <plugin root>/bin/statusline.js agy` inside agy';
 
 async function fetchQuota() {
   const seen = statusline.load('agy');
@@ -54,7 +113,9 @@ async function fetchQuota() {
         note: `agy's status line ran at ${clock(probe.seenAt)} but carried no quota (${shape})`,
       };
     }
-    return { state: 'setup-needed', note: SETUP_HINT };
+    return bridgeInstalled()
+      ? { state: 'setup-needed', note: 'status line is wired up — restart agy and send it one turn' }
+      : { state: 'setup-needed', note: SETUP_HINT };
   }
   const windows = parseQuota(seen.quota);
   if (!windows.length) {

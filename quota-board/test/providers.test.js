@@ -112,3 +112,24 @@ test('claude reads the per-model weekly pool from limits[]', () => {
   assert.deepStrictEqual(windows.map((w) => w.label), ['5h', '7d', '7d Fable']);
   assert.strictEqual(windows[2].usedPercent, 40);
 });
+
+test('agy quota keyed by model gives a row per window and model', () => {
+  const windows = agy.__test.parseQuota({
+    'gemini-3-pro': { five_hour: { used_percentage: 20 }, weekly: { used_percentage: 55, resets_at: 1790000000 } },
+    'claude-opus': { weekly: { used_percentage: 5 } },
+  });
+  assert.deepStrictEqual(windows.map((w) => w.label), ['5h gemini-3-pro', '7d gemini-3-pro', '7d claude-opus']);
+  assert.strictEqual(windows[1].resetsAt, 1790000000);
+});
+
+test('agy model names come from display_name when it is there', () => {
+  const windows = agy.__test.parseQuota({
+    pool_a: { display_name: 'Gemini 3 Pro', five_hour: { used_percentage: 33 }, seven_day: { used_percentage: 44 } },
+  });
+  assert.deepStrictEqual(windows.map((w) => w.label), ['5h Gemini 3 Pro', '7d Gemini 3 Pro']);
+});
+
+test('an agy pool we have no name for is printed as it came, not dropped', () => {
+  const windows = agy.__test.parseQuota({ surprise_pool: { used_percentage: 7 } });
+  assert.deepStrictEqual(windows, [{ label: 'surprise pool', usedPercent: 7, resetsAt: null }]);
+});
