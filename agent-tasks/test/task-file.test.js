@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { taskFileText, promptText, agentName, PLAN_HEADING } = require('../lib/task-file');
+const { taskFileText, promptText, agentName, agentArgv, PLAN_HEADING } = require('../lib/task-file');
 const { progress } = require('../lib/plan');
 
 test('файл задачи сразу готов принять план', () => {
@@ -48,4 +48,25 @@ test('имя не длиннее 32 символов и не кончается 
 
 test('заголовок, начинающийся с цифры, не даёт негодного имени', () => {
   assert.match(agentName('2026 report', { kind: 'codex', paneId: 'w1:pQ' }), /^[a-z]/);
+});
+
+test('claude получает доступ к папке задач: файл лежит вне его рабочей папки', () => {
+  assert.deepStrictEqual(
+    agentArgv('claude', 'sonnet', 'C:/state/tasks'),
+    ['--model', 'sonnet', '--add-dir', 'C:/state/tasks'],
+  );
+});
+
+test('модель передаётся одинаково всем, --add-dir — только claude', () => {
+  assert.deepStrictEqual(agentArgv('codex', 'gpt-5.1-codex', 'C:/state/tasks'), ['--model', 'gpt-5.1-codex']);
+  assert.deepStrictEqual(agentArgv('claude', null, 'C:/state/tasks'), ['--add-dir', 'C:/state/tasks']);
+  assert.deepStrictEqual(agentArgv('codex', null, 'C:/state/tasks'), [], 'без модели агенту нечего передавать');
+});
+
+test('режим разрешений передаётся только когда его попросили', () => {
+  assert.deepStrictEqual(
+    agentArgv('claude', null, 'C:/state/tasks', 'acceptEdits'),
+    ['--add-dir', 'C:/state/tasks', '--permission-mode', 'acceptEdits'],
+  );
+  assert.ok(!agentArgv('claude', null, 'C:/state/tasks').includes('--permission-mode'));
 });

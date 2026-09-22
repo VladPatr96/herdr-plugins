@@ -24,7 +24,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { taskFileText, promptText, agentName, PLAN_HEADING } = require('../lib/task-file');
+const { taskFileText, promptText, agentName, agentArgv, PLAN_HEADING } = require('../lib/task-file');
 const {
   herdr,
   herdrText,
@@ -59,6 +59,7 @@ function parseArgs(argv) {
       case '--task-file': args.taskFile = take(); break;
       case '--cwd': args.cwd = take(); break;
       case '--workspace': args.workspace = take(); break;
+      case '--permission-mode': args.permissionMode = take(); break;
       case '--focus': args.focus = true; break;
       case '--json': break; // the only output there is
       default: throw new Error(`unknown option ${arg}`);
@@ -192,8 +193,40 @@ function submit(paneId) {
   }
 }
 
+// Дождаться, пока агент перестанет перерисовывать экран.
+//
+// `agent start` возвращается по «агент опознан и готов принимать ввод», но
+// TUI в этот момент ещё выкладывает заставку, и напечатанный текст попадает не
+// в композитор, а прямо поверх неё — в выводе потом видно, как промт и баннер
+// перемешаны посимвольно. Никакого признака «я дорисовал» агент не подаёт, а
+// придумывать каждому свой (строка статуса, приглашение) — значит ломаться на
+// каждом обновлении.
+//
+// Зато неподвижный экран виден одинаково у всех: два одинаковых снимка подряд
+// — значит, рисовать больше нечего.
+const QUIET_POLL_MS = 1000;
+const QUIET_WAIT_MS = 25_000;
+
+function waitForQuiet(paneId) {
+  const until = Date.now() + QUIET_WAIT_MS;
+  let previous = null;
+  while (Date.now() < until) {
+    let screen;
+    try {
+      screen = herdrText(['pane', 'read', paneId, '--source', 'visible']);
+    } catch {
+      return false;
+    }
+    if (previous !== null && screen === previous) return true;
+    previous = screen;
+    sleep(QUIET_POLL_MS);
+  }
+  return false;
+}
+
 function deliverTask(paneId, prompt, marker) {
   let last = null;
+  waitForQuiet(paneId);
   for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
     try {
       herdr(['agent', 'prompt', paneId, prompt, '--wait', '--until', 'working', '--timeout', String(PROMPT_TIMEOUT_MS)]);
@@ -255,10 +288,10 @@ function launch(args) {
     launchedAt: new Date().toISOString(),
   };
 
-  // 2. Агент. Всё после `--` уходит ему самому: и claude, и codex берут модель
-  // одинаково — `--model <id>`.
+  // 2. Агент. Всё после `--` уходит ему самому.
   const startArgs = ['agent', 'start', name, '--kind', args.kind, '--pane', paneId, '--timeout', String(START_TIMEOUT_MS)];
-  if (args.model) startArgs.push('--', '--model', args.model);
+  const agentArgs = agentArgv(args.kind, args.model, path.dirname(file), args.permissionMode);
+  if (agentArgs.length) startArgs.push('--', ...agentArgs);
   let started;
   try {
     started = herdr(startArgs)?.result;

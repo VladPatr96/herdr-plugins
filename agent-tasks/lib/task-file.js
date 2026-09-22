@@ -58,4 +58,26 @@ function agentName(title, { kind = 'agent', paneId = '' } = {}) {
   return `${kind}${tail ? `-${tail}` : ''}`.slice(0, 32);
 }
 
-module.exports = { PLAN_HEADING, taskFileText, promptText, agentName };
+// Аргументы, с которыми поднимается сам агент.
+//
+// Модель одинакова у claude и codex — `--model <id>`.
+//
+// `--add-dir` у claude важнее, чем кажется: файл задачи лежит в папке
+// состояния плагина, то есть **вне** рабочего каталога агента, и агент со
+// свежей сессией спрашивает разрешения его прочитать — то есть встаёт
+// заблокированным на первом же шаге, вместо того чтобы работать. Флаг
+// открывает ровно одну папку — ту, где лежат задачи, — и вопрос отпадает.
+// `--permission-mode` плагин сам не выставляет. Доступ к папке — это одно, а
+// право править файлы без спроса — совсем другое, и решать его за человека
+// нельзя: он выбрал свой режим не просто так. В режиме, где правки
+// подтверждаются, агент спросит разрешения дописать план в свой же файл
+// задачи; кого это раздражает — передаёт режим явно.
+function agentArgv(kind, model, tasksDir, permissionMode) {
+  const argv = [];
+  if (model) argv.push('--model', model);
+  if (kind === 'claude' && tasksDir) argv.push('--add-dir', tasksDir);
+  if (kind === 'claude' && permissionMode) argv.push('--permission-mode', permissionMode);
+  return argv;
+}
+
+module.exports = { PLAN_HEADING, taskFileText, promptText, agentName, agentArgv };
