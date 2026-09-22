@@ -20,6 +20,12 @@ const { line: paint, wrap, shift, colorEnabled, styleFor } = require('../lib/pai
 const { languageFor, highlight } = require('../lib/syntax');
 const { actionsFor } = require('../lib/keys');
 const { editorCommand } = require('../lib/editor');
+const { openTrace } = require('../lib/trace');
+
+// Off unless asked for. When a pane is slow on a machine we cannot watch, this
+// is what says whether the time goes on building the frame, on writing it, or
+// somewhere the board never sees.
+const TRACE = openTrace(process.env);
 
 // Asked once: whether the terminal wants colour is not going to change while
 // the board is up, and every row of every frame would otherwise ask again.
@@ -50,14 +56,26 @@ const size = () => ({ width: out.columns || 80, height: out.rows || 24 });
 // Declared here because the terminal helpers below attach and detach it, and
 // the key handlers it calls are defined further down.
 function onKeys(chunk) {
+  const started = process.hrtime.bigint();
   let changed = false;
-  for (const action of actionsFor(chunk.toString('utf8'))) {
+  const actions = actionsFor(chunk.toString('utf8'));
+  for (const action of actions) {
     if (action !== 'quit') state.message = '';
     // Each press is applied in turn; the frame is drawn once at the end, so a
     // held key does not repaint the pane for every repeat.
     if (state.mode === 'view' ? onViewKey(action) : onTreeKey(action)) changed = true;
   }
   if (changed) draw();
+  // The whole round trip the board is responsible for: the keys that arrived in
+  // one chunk, what they meant, and the frame that answered them. Anything the
+  // reader waited for beyond this happened outside the board.
+  TRACE.write({
+    chunk: chunk.length,
+    keys: actions.join(',') || '-',
+    mode: state.mode,
+    drew: changed,
+    ms: Number(process.hrtime.bigint() - started) / 1e6,
+  });
 }
 
 function refreshRows(keepPath) {
@@ -206,13 +224,22 @@ function viewLines(width, height) {
 }
 
 function draw() {
+  const started = process.hrtime.bigint();
   const { width, height } = size();
   const body = Math.max(1, height - 2);
   // The body is drawn before the header, which reads what the drawing settled:
   // how far the file scrolled, and how much of it ended up on screen.
   const lines = state.mode === 'view' ? viewLines(width, body) : treeLines(width, body);
   // One write per frame: a pane redrawn line by line flickers.
-  out.write(`\u001b[H${[header(width), ...lines, footer(width)].join('\r\n')}`);
+  const frame = `\u001b[H${[header(width), ...lines, footer(width)].join('\r\n')}`;
+  const built = process.hrtime.bigint();
+  out.write(frame);
+  TRACE.write({
+    frame: frame.length,
+    size: `${width}x${height}`,
+    build: Number(built - started) / 1e6,
+    write: Number(process.hrtime.bigint() - built) / 1e6,
+  });
 }
 
 // ── the terminal ───────────────────────────────────────────────────────────
@@ -425,10 +452,25 @@ function onViewKey(action) {
 
 // ── running ────────────────────────────────────────────────────────────────
 
-out.on('resize', draw);
+// A resize storm would repaint the pane over and over without a key ever being
+// pressed, which is exactly the sort of thing the trace exists to catch.
+out.on('resize', () => {
+  TRACE.write({ event: 'resize', size: `${out.columns}x${out.rows}` });
+  draw();
+});
 process.on('exit', leaveScreen);
 process.on('SIGINT', quit);
 process.on('SIGTERM', quit);
+
+TRACE.write({
+  event: 'start',
+  pid: process.pid,
+  node: process.version,
+  size: `${out.columns}x${out.rows}`,
+  tty: Boolean(process.stdin.isTTY),
+  root,
+  rows: state.rows.length,
+});
 
 enterScreen();
 draw();

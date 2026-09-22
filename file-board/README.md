@@ -124,6 +124,7 @@ nothing until the config is reloaded — `herdr server reload-config`, or
 | `FILE_BOARD_EDITOR` | the editor `e` runs; falls back to `EDITOR`, then `nvim` |
 | `FILE_BOARD_ROOT` | the folder to show; the opener sets it, and it overrides the pane's working directory |
 | `FILE_BOARD_COLOR` | `0` draws the board without colour; `NO_COLOR` does the same |
+| `FILE_BOARD_TRACE` | a file to append timings to: every keypress and every frame, with how long each took and how big it was. Off unless set, and never a reason for the pane to fall over |
 
 An editor installed while herdr was already running is not on the PATH herdr
 inherited. The board looks in the usual install locations before reporting it as
