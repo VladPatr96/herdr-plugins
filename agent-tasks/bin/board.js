@@ -10,6 +10,7 @@ const { progress } = require('../lib/plan');
 const { boardRow } = require('../lib/labels');
 const { renderBoard } = require('../lib/render-board');
 const { borrowPlan, stillThere } = require('../lib/borrow');
+const sidebarView = require('../lib/sidebar-view');
 const { herdr, resolvedStateDir, loadRegistry, readTask, readJson, writeJsonAtomic } = require('../lib/runtime');
 
 const DEFAULT_INTERVAL_SECONDS = 5;
@@ -25,9 +26,13 @@ function viewFile() {
   return path.join(resolvedStateDir(), 'board-view.json');
 }
 
+const view = readJson(viewFile()) || {};
+
 const state = {
   rows: [],
-  plans: readJson(viewFile())?.plans === true,
+  plans: view.plans === true,
+  split: view.split === 'right' ? 'right' : null,
+  hidden: sidebarView.hiddenWanted(),
   selected: 0,
   notice: null,
   borrowed: null,
@@ -64,6 +69,8 @@ function draw() {
     plans: state.plans,
     selected: state.selected,
     borrowed: state.borrowed && state.borrowed.paneId,
+    split: boardSplit(),
+    hidden: state.hidden,
     stateDir: resolvedStateDir(),
   });
   if (state.notice) lines.push(` ${state.notice}`);
@@ -163,11 +170,60 @@ function sendHome(borrowed) {
   }
 }
 
-// Куда подставлять агента. Вниз — потому что список уже стоит колонкой сбоку:
-// агент занимает место под ним, в той же колонке, и оба видны разом. Вправо —
-// когда список открыт во всю ширину.
+// Куда подставлять агента. Вниз — потому что список обычно стоит колонкой
+// сбоку: агент занимает место под ним, в той же колонке, и оба видны разом.
+// Вправо — когда список открыт во всю ширину. Переключается клавишей `d`,
+// переменная среды задаёт лишь то, с чего начать.
 function boardSplit() {
+  if (state.split) return state.split;
   return process.env.AGENT_TASKS_BOARD_SPLIT === 'right' ? 'right' : 'down';
+}
+
+function rememberView() {
+  try {
+    writeJsonAtomic(viewFile(), { plans: state.plans, split: boardSplit() });
+  } catch {
+    /* a preference not surviving the session is not worth an error */
+  }
+}
+
+// Сменить направление и тут же переложить того, кто стоит рядом: иначе
+// переключатель ничего не делает, пока агента не выберут заново.
+function toggleSplit() {
+  state.split = boardSplit() === 'down' ? 'right' : 'down';
+  rememberView();
+  const shown = state.borrowed;
+  if (shown) {
+    const row = state.rows.find((item) => item.paneId === shown.paneId);
+    const tabId = boardTab();
+    if (row && tabId) {
+      try {
+        sendHome(shown);
+        bringHere(row, tabId);
+        rememberBorrow({ paneId: row.paneId, title: row.title });
+      } catch (error) {
+        state.notice = `не удалось переложить: ${error.message}`;
+      }
+    }
+  }
+  draw();
+}
+
+// Прятать ли этих агентов из панели «Agents». Ходит в сокет herdr, поэтому
+// одна из немногих асинхронных вещей в этом окне.
+function toggleSidebar() {
+  sidebarView
+    .toggle()
+    .then((result) => {
+      state.hidden = result.hidden;
+      state.notice = result.hidden
+        ? 'агенты задач убраны из сайдбара'
+        : 'агенты задач снова в сайдбаре';
+    })
+    .catch((error) => {
+      state.notice = `сайдбар: ${error.message}`;
+    })
+    .then(draw);
 }
 
 // Доля, остающаяся списку. Список — это несколько коротких строк, агенту
@@ -259,11 +315,7 @@ function release() {
 
 function togglePlans() {
   state.plans = !state.plans;
-  try {
-    writeJsonAtomic(viewFile(), { plans: state.plans });
-  } catch {
-    /* a preference not surviving the session is not worth an error */
-  }
+  rememberView();
   draw();
 }
 
@@ -318,6 +370,8 @@ function main() {
       else if (key === 'r' || key === 'R') refresh();
       else if (key === 'p' || key === 'P') togglePlans();
       else if (key === 'o' || key === 'O') release();
+      else if (key === 'd' || key === 'D') toggleSplit();
+      else if (key === 's' || key === 'S') toggleSidebar();
       // q, Esc, Ctrl+C, Ctrl+D all close the window.
       else if (key === 'q' || key === 'Q' || key === '\u001b' || key === '\u0003' || key === '\u0004') quit();
       else if (had) draw();

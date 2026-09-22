@@ -95,24 +95,58 @@ function agentBlock(row, { width, color, plans, selected = false, number = null,
   return lines;
 }
 
-// Подсказка по клавишам в одну строку: когда рядом со списком стоит агент,
-// колонка узкая, а перенос подсказки на три строки съедает сам список. Не
-// влезло словами — остаются одни клавиши.
-function keyHints(width, hasRows, plans, borrowed) {
-  const full = [
-    hasRows ? '↑↓ выбрать · Enter показать · 1-9 сразу' : null,
-    borrowed ? 'o отпустить' : null,
-    plans ? 'p свернуть план' : 'p показать план',
-    'r обновить',
-    'q закрыть',
-  ].filter(Boolean).join(' · ');
-  if (full.length + 2 <= width) return full;
-  const short = [hasRows ? '↑↓ Enter 1-9' : null, borrowed ? 'o' : null, 'p', 'r', 'q']
-    .filter(Boolean).join(' · ');
-  return short.length + 2 <= width ? short : short.replace(/ · /g, ' ');
+// Подсказка по клавишам — двумя строками: сверху то, чем ходят по списку,
+// снизу переключатели. Одной строкой они уже не помещаются ни в одну колонку,
+// а переключатель, которого не видно, всё равно что отсутствует.
+//
+// Каждый переключатель называет то, что он сделает, а не то, как сейчас:
+// «свернуть план» понятнее, чем «план: развёрнут».
+//
+// В узкой колонке слова уходят, клавиши остаются: строка, переносимая на три,
+// съедает сам список.
+// Первый вариант, который влезает. Последний — голые клавиши, и если уж не
+// влезли и они, разделители сжимаются до пробела.
+function fit(variants, width) {
+  for (const variant of variants) {
+    if (variant.length + 2 <= width) return variant;
+  }
+  return variants[variants.length - 1].replace(/ · /g, ' ');
 }
 
-function renderBoard({ rows = [], width = 80, color = true, plans = false, stateDir = null, selected = 0, borrowed = null } = {}) {
+function keyHints(width, hasRows, { plans, borrowed, split, hidden } = {}) {
+  const lines = [];
+  if (hasRows) {
+    lines.push(fit([
+      ['↑↓ выбрать', 'Enter показать', '1-9 сразу', borrowed ? 'o отпустить' : null]
+        .filter(Boolean).join(' · '),
+      ['↑↓', 'Enter', '1-9', borrowed ? 'o' : null].filter(Boolean).join(' · '),
+    ], width));
+  }
+  lines.push(fit([
+    [
+      plans ? 'p свернуть план' : 'p показать план',
+      split === 'right' ? 'd вниз' : 'd вправо',
+      hidden ? 's вернуть в сайдбар' : 's убрать из сайдбара',
+      'r обновить',
+      'q закрыть',
+    ].join(' · '),
+    ['p план', split === 'right' ? 'd вниз' : 'd вправо', 's сайдбар', 'r обновить', 'q закрыть'].join(' · '),
+    ['p', 'd', 's', 'r', 'q'].join(' · '),
+  ], width));
+  return lines;
+}
+
+function renderBoard({
+  rows = [],
+  width = 80,
+  color = true,
+  plans = false,
+  stateDir = null,
+  selected = 0,
+  borrowed = null,
+  split = 'down',
+  hidden = false,
+} = {}) {
   const lines = [];
   const title = paint(' Агенты и их задачи ', 'bold', color);
   lines.push(title);
@@ -141,7 +175,9 @@ function renderBoard({ rows = [], width = 80, color = true, plans = false, state
 
   lines.push('');
   lines.push(paint('─'.repeat(Math.max(10, Math.min(width, 100))), 'dim', color));
-  lines.push(paint(` ${keyHints(width, rows.length > 0, plans, borrowed)}`, 'dim', color));
+  for (const hint of keyHints(width, rows.length > 0, { plans, borrowed, split, hidden })) {
+    lines.push(paint(` ${hint}`, 'dim', color));
+  }
   if (stateDir) lines.push(paint(` задачи: ${clip(stateDir, width - 10)}`, 'grey', color));
   return lines;
 }

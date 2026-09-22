@@ -37,23 +37,46 @@ test('десятому агенту номера нет: нажимать неч
 });
 
 test('подсказка называет переход, пока есть куда переходить', () => {
-  assert.match(plain(renderBoard({ rows: ROWS, color: false, width: 100 })), /Enter показать/);
-  const empty = plain(renderBoard({ rows: [], color: false, width: 100 }));
+  assert.match(plain(renderBoard({ rows: ROWS, color: false, width: 60 })), /Enter показать/);
+  const empty = plain(renderBoard({ rows: [], color: false, width: 60 }));
   assert.ok(!empty.includes('Enter показать'), 'в пустом списке показывать некого');
   assert.match(empty, /Ни одного запущенного агента/);
 });
 
 test('в узкой колонке подсказка ужимается до клавиш, а не переносится', () => {
-  const wide = plain(renderBoard({ rows: ROWS, color: false, width: 100 }));
+  const wide = plain(renderBoard({ rows: ROWS, color: false, width: 60 }));
   assert.match(wide, /↑↓ выбрать · Enter показать/);
-  const narrow = renderBoard({ rows: ROWS, color: false, width: 30 });
-  const hint = narrow.find((line) => line.includes('Enter'));
-  assert.ok(hint.length <= 30, `подсказка шире колонки: ${hint.length}`);
-  assert.ok(!hint.includes('выбрать'), 'слова уходят, клавиши остаются');
+  const narrow = renderBoard({ rows: ROWS, color: false, width: 24 });
+  for (const hint of narrow.filter((line) => /Enter|q закрыть|· q/.test(line))) {
+    assert.ok(hint.length <= 24, `подсказка шире колонки: ${JSON.stringify(hint)}`);
+  }
+  assert.ok(!plain(narrow).includes('выбрать'), 'слова уходят, клавиши остаются');
+});
+
+test('каждый переключатель назван тем, что он сделает', () => {
+  const folded = plain(renderBoard({ rows: ROWS, color: false, width: 90, plans: false, split: 'down', hidden: false }));
+  assert.match(folded, /p показать план/);
+  assert.match(folded, /d вправо/);
+  assert.match(folded, /s убрать из сайдбара/);
+  const open = plain(renderBoard({ rows: ROWS, color: false, width: 90, plans: true, split: 'right', hidden: true }));
+  assert.match(open, /p свернуть план/);
+  assert.match(open, /d вниз/);
+  assert.match(open, /s вернуть в сайдбар/);
+});
+
+test('подсказка ужимается по ширине, но направление не теряет', () => {
+  const mid = renderBoard({ rows: ROWS, color: false, width: 60, split: 'right' }).find((l) => l.includes('q закрыть'));
+  assert.ok(mid.length <= 60, `не влезло: ${mid.length}`);
+  assert.match(mid, /d вниз/, 'куда переложит — видно на любой ширине');
+});
+
+test('отпустить предлагается только когда есть кого', () => {
+  assert.ok(!plain(renderBoard({ rows: ROWS, color: false, width: 60 })).includes('o отпустить'));
+  assert.match(plain(renderBoard({ rows: ROWS, color: false, width: 60, borrowed: 'w8:p2' })), /o отпустить/);
 });
 
 test('агент, стоящий рядом со списком, помечен отдельно от выбранного', () => {
-  const text = plain(renderBoard({ rows: ROWS, color: false, width: 100, selected: 0, borrowed: 'w8:p2' }));
+  const text = plain(renderBoard({ rows: ROWS, color: false, width: 60, selected: 0, borrowed: 'w8:p2' }));
   const lines = text.split('\n');
   const first = lines.findIndex((line) => line.includes('Починить парсер дат'));
   const second = lines.findIndex((line) => line.includes('Собрать отчёт'));

@@ -23,9 +23,17 @@ rows = [["state_icon", "machine", "workspace", "tab"], ["agent", { token = "$hot
 rows = [
   ["state_icon", "machine", "workspace", "tab"],
   ["agent", { token = "$hotkey", align = "right", fg = "#f9e2af", bold = true }],
-  [{ token = "$task", bold = true }, { token = "$task_progress", align = "right", fg = "#a6e3a1" }],
+  [
+    { token = "$task", bold = true },
+    { token = "$agents", fg = "#f38ba8", bold = true },
+    { token = "$task_progress", align = "right", fg = "#a6e3a1" },
+  ],
 ]
 ```
+
+Одна строка служит обоим: у агента заполнен `$task`, у сессии, которая его
+запустила, — `$agents` (`▶ 3 агента`, розовым). У всех прочих не заполнено
+ничего, и строка пропадает.
 
 > `align` понимает только ваша сборка herdr (`VladPatr96/herdr@sidebar-token-align`).
 > Стоковый herdr её отвергает — там уберите `align` из обеих строк.
@@ -49,6 +57,9 @@ herdr server reload-config
 Один агент сейчас запущен и уже закончил — `Проверка запуска агента`, `Alt+8`.
 
 - [ ] Под именем агента видна его задача, справа `4/4`.
+- [ ] **У вашей собственной сессии** (той, из которой запускали) в этой же
+      строке стоит `▶ N агентов` — по ней оркестратор отличается от агентов.
+      Закроете всех — пометка уйдёт.
 - [ ] `Alt+8` открывает его сессию: видна переписка, можно спросить и получить
       ответ. Это обычная сессия, не субагент.
 - [ ] Действие `Agent Tasks: open the board` (или уже открытый пейн «Агенты и

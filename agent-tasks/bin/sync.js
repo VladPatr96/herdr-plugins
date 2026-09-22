@@ -25,8 +25,8 @@ const {
 function sync() {
   const dir = rememberStateDir();
   const entries = loadRegistry(dir);
-  if (!Object.keys(entries).length) return;
-
+  // Пустой реестр — не повод выйти сразу: у оркестратора мог остаться токен с
+  // числом агентов, и снять его больше некому.
   const agents = herdr(['agent', 'list'])?.result?.agents ?? [];
   const plans = {};
   for (const paneId of Object.keys(entries)) {
