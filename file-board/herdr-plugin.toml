@@ -1,0 +1,28 @@
+id = "vladpatr96.file-board"
+name = "File Board"
+version = "0.1.0"
+min_herdr_version = "0.9.1"
+description = "A file tree in a Herdr pane, next to the agent you are working with: walk the folders, look inside a file, open it in nvim."
+platforms = ["linux", "macos", "windows"]
+
+# The board is a normal pane, split off beside the agent, and it stays until you
+# close it with `q`.
+#
+# The command is `node` from PATH plus a relative script path. That matters on
+# Windows: Herdr cannot spawn a *relative executable* as a pane command
+# (ERROR_PATH_NOT_FOUND), which is why plugins shipping their own binary need a
+# sidecar launcher. A Node plugin sidesteps it entirely.
+[[panes]]
+id = "board"
+title = "Files"
+placement = "split"
+command = ["node", "--no-warnings", "bin/board.js"]
+
+# The hotkey calls this; a pane cannot open itself declaratively. The action
+# knows which pane the key was pressed in, so the board opens on that agent's
+# folder.
+[[actions]]
+id = "open"
+title = "File Board: open the file tree"
+contexts = ["workspace", "global"]
+command = ["node", "bin/open.js"]
