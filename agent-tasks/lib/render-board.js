@@ -50,23 +50,30 @@ function bar(done, total, width = 10) {
   return '█'.repeat(filled) + '░'.repeat(width - filled);
 }
 
-function agentBlock(row, { width, color, plans }) {
+// Строка выбранного агента помечается курсором и своим номером: номер — это
+// то, что нажимают, чтобы перейти к нему, поэтому он стоит там же, где глаз
+// ищет агента, а не в подсказке внизу.
+function agentBlock(row, { width, color, plans, selected = false, number = null }) {
   const lines = [];
   const status = statusOf(row.status);
+  const cursor = selected ? paint('▸', 'blue', color) : ' ';
+  const index = number === null ? '' : `${paint(`${number}`, selected ? 'blue' : 'grey', color)} `;
+  const title = clip(row.title, Math.max(20, width - 30));
   const head = [
-    paint(status.icon, status.color, color),
-    paint(clip(row.title, Math.max(20, width - 28)), 'bold', color),
+    cursor,
+    index + paint(status.icon, status.color, color),
+    selected ? paint(title, 'bold', color) : title,
   ].join(' ');
   lines.push(head);
 
   const meta = [row.kind, row.model, row.hotkey, status.text].filter(Boolean).join(' · ');
-  lines.push(`  ${paint(clip(meta, width - 2), 'dim', color)}`);
+  lines.push(`    ${paint(clip(meta, width - 4), 'dim', color)}`);
 
   if (row.total) {
     const progress = `${bar(row.done, row.total)} ${row.done}/${row.total}`;
-    lines.push(`  ${paint(progress, row.done === row.total ? 'green' : 'yellow', color)}`);
+    lines.push(`    ${paint(progress, row.done === row.total ? 'green' : 'yellow', color)}`);
   } else {
-    lines.push(`  ${paint('плана ещё нет', 'grey', color)}`);
+    lines.push(`    ${paint('плана ещё нет', 'grey', color)}`);
   }
 
   // Развёрнутый чек-лист — по `p`; свёрнутый показывает только текущий шаг,
@@ -75,17 +82,17 @@ function agentBlock(row, { width, color, plans }) {
   if (plan) {
     for (const item of plan) {
       const mark = item.done ? paint('✓', 'green', color) : paint('·', 'grey', color);
-      const text = item.done ? paint(clip(item.text, width - 6), 'dim', color) : clip(item.text, width - 6);
-      lines.push(`    ${mark} ${text}`);
+      const text = item.done ? paint(clip(item.text, width - 8), 'dim', color) : clip(item.text, width - 8);
+      lines.push(`      ${mark} ${text}`);
     }
   } else if (row.step) {
-    lines.push(`  ${paint(`→ ${clip(row.step, width - 6)}`, 'grey', color)}`);
+    lines.push(`    ${paint(`→ ${clip(row.step, width - 8)}`, 'grey', color)}`);
   }
 
   return lines;
 }
 
-function renderBoard({ rows = [], width = 80, color = true, plans = false, stateDir = null } = {}) {
+function renderBoard({ rows = [], width = 80, color = true, plans = false, stateDir = null, selected = 0 } = {}) {
   const lines = [];
   const title = paint(' Агенты и их задачи ', 'bold', color);
   lines.push(title);
@@ -100,14 +107,25 @@ function renderBoard({ rows = [], width = 80, color = true, plans = false, state
     lines.push(paint('  и появляется здесь.', 'grey', color));
   }
 
-  for (const row of rows) {
+  rows.forEach((row, index) => {
     lines.push('');
-    lines.push(...agentBlock(row, { width, color, plans }));
-  }
+    lines.push(...agentBlock(row, {
+      width,
+      color,
+      plans,
+      selected: index === selected,
+      number: index < 9 ? index + 1 : null,
+    }));
+  });
 
   lines.push('');
   lines.push(paint('─'.repeat(Math.max(10, Math.min(width, 100))), 'dim', color));
-  const keys = plans ? 'p свернуть план · r обновить · q закрыть' : 'p показать план · r обновить · q закрыть';
+  const keys = [
+    rows.length ? '↑↓ выбрать · Enter перейти · 1-9 сразу' : null,
+    plans ? 'p свернуть план' : 'p показать план',
+    'r обновить',
+    'q закрыть',
+  ].filter(Boolean).join(' · ');
   lines.push(paint(` ${keys}`, 'dim', color));
   if (stateDir) lines.push(paint(` задачи: ${clip(stateDir, width - 10)}`, 'grey', color));
   return lines;
