@@ -17,6 +17,7 @@ const { boardRoot } = require('../lib/start-dir');
 const { openFile, MAX_LINES } = require('../lib/view');
 const { rowSegments, fit, fitEnd, scrollTo, lineCount } = require('../lib/render');
 const { line: paint, wrap, shift, colorEnabled, styleFor } = require('../lib/paint');
+const { paintFrame } = require('../lib/frame');
 const { languageFor, highlight } = require('../lib/syntax');
 const { actionsFor } = require('../lib/keys');
 const { editorCommand } = require('../lib/editor');
@@ -48,6 +49,10 @@ const state = {
   // on. `w` turns it off for a file where the indentation is the point.
   wrap: true,
   file: null, // { path, view, painted, offset, column, shown }
+  // The rows the pane is showing, so the next frame can send only what moved,
+  // and the shape they were drawn for.
+  frame: null,
+  shape: '',
   message: '',
 };
 
@@ -226,16 +231,29 @@ function viewLines(width, height) {
 function draw() {
   const started = process.hrtime.bigint();
   const { width, height } = size();
+  // A pane that changed shape has reflowed whatever was on it. Rows may still
+  // count the same while every one of them means something else, so there is
+  // nothing left worth comparing against.
+  const shape = `${width}x${height}`;
+  if (shape !== state.shape) {
+    state.frame = null;
+    state.shape = shape;
+  }
   const body = Math.max(1, height - 2);
   // The body is drawn before the header, which reads what the drawing settled:
   // how far the file scrolled, and how much of it ended up on screen.
   const lines = state.mode === 'view' ? viewLines(width, body) : treeLines(width, body);
-  // One write per frame: a pane redrawn line by line flickers.
-  const frame = `\u001b[H${[header(width), ...lines, footer(width)].join('\r\n')}`;
+  const next = [header(width), ...lines, footer(width)];
+  // Only what changed, and in one write: a pane redrawn row by row flickers,
+  // and a pane redrawn in full on every key is what makes herdr slow.
+  const frame = paintFrame(state.frame, next);
+  state.frame = next;
+
   const built = process.hrtime.bigint();
-  out.write(frame);
+  if (frame !== '') out.write(frame);
   TRACE.write({
     frame: frame.length,
+    rows: next.length,
     size: `${width}x${height}`,
     build: Number(built - started) / 1e6,
     write: Number(process.hrtime.bigint() - built) / 1e6,
@@ -458,7 +476,10 @@ out.on('resize', () => {
   TRACE.write({ event: 'resize', size: `${out.columns}x${out.rows}` });
   draw();
 });
-process.on('exit', leaveScreen);
+process.on('exit', () => {
+  leaveScreen();
+  TRACE.close();
+});
 process.on('SIGINT', quit);
 process.on('SIGTERM', quit);
 

@@ -1,2 +1,6 @@
 node_modules/
 *.tmp
+
+# What `FILE_BOARD_TRACE` writes when a pane is being measured. It belongs to
+# the machine it was recorded on, not to the plugin.
+*-trace.log
