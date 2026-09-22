@@ -163,15 +163,22 @@ function sendHome(borrowed) {
   }
 }
 
-// Доля ширины, остающаяся списку. Список — колонка с короткими строками,
-// агенту нужно больше.
+// Куда подставлять агента. Вниз — потому что список уже стоит колонкой сбоку:
+// агент занимает место под ним, в той же колонке, и оба видны разом. Вправо —
+// когда список открыт во всю ширину.
+function boardSplit() {
+  return process.env.AGENT_TASKS_BOARD_SPLIT === 'right' ? 'right' : 'down';
+}
+
+// Доля, остающаяся списку. Список — это несколько коротких строк, агенту
+// нужно место.
 function boardRatio() {
   const configured = Number(process.env.AGENT_TASKS_BOARD_RATIO);
   return Number.isFinite(configured) && configured > 0.1 && configured < 0.9 ? configured : 0.35;
 }
 
 function bringHere(row, tabId) {
-  const args = ['pane', 'move', row.paneId, '--tab', tabId, '--split', 'right', '--ratio', String(boardRatio())];
+  const args = ['pane', 'move', row.paneId, '--tab', tabId, '--split', boardSplit(), '--ratio', String(boardRatio())];
   if (BOARD_PANE) args.push('--target-pane', BOARD_PANE);
   herdr(args); // переезд сам переводит фокус на переехавшую панель
 }
