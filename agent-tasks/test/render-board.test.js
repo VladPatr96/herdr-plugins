@@ -37,10 +37,29 @@ test('десятому агенту номера нет: нажимать неч
 });
 
 test('подсказка называет переход, пока есть куда переходить', () => {
-  assert.match(plain(renderBoard({ rows: ROWS, color: false })), /Enter перейти/);
-  const empty = plain(renderBoard({ rows: [], color: false }));
-  assert.ok(!empty.includes('Enter перейти'), 'в пустом списке переходить некуда');
+  assert.match(plain(renderBoard({ rows: ROWS, color: false, width: 100 })), /Enter показать/);
+  const empty = plain(renderBoard({ rows: [], color: false, width: 100 }));
+  assert.ok(!empty.includes('Enter показать'), 'в пустом списке показывать некого');
   assert.match(empty, /Ни одного запущенного агента/);
+});
+
+test('в узкой колонке подсказка ужимается до клавиш, а не переносится', () => {
+  const wide = plain(renderBoard({ rows: ROWS, color: false, width: 100 }));
+  assert.match(wide, /↑↓ выбрать · Enter показать/);
+  const narrow = renderBoard({ rows: ROWS, color: false, width: 30 });
+  const hint = narrow.find((line) => line.includes('Enter'));
+  assert.ok(hint.length <= 30, `подсказка шире колонки: ${hint.length}`);
+  assert.ok(!hint.includes('выбрать'), 'слова уходят, клавиши остаются');
+});
+
+test('агент, стоящий рядом со списком, помечен отдельно от выбранного', () => {
+  const text = plain(renderBoard({ rows: ROWS, color: false, width: 100, selected: 0, borrowed: 'w8:p2' }));
+  const lines = text.split('\n');
+  const first = lines.findIndex((line) => line.includes('Починить парсер дат'));
+  const second = lines.findIndex((line) => line.includes('Собрать отчёт'));
+  assert.ok(!lines[first + 1].includes('рядом'), 'выбранный курсором — ещё не показанный');
+  assert.ok(lines[second + 1].includes('рядом'));
+  assert.match(text, /o отпустить/);
 });
 
 test('прогресс рисуется полоской, а его отсутствие — словами', () => {

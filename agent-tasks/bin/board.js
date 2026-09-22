@@ -9,6 +9,7 @@ const path = require('node:path');
 const { progress } = require('../lib/plan');
 const { boardRow } = require('../lib/labels');
 const { renderBoard } = require('../lib/render-board');
+const { borrowPlan, stillThere } = require('../lib/borrow');
 const { herdr, resolvedStateDir, loadRegistry, readTask, readJson, writeJsonAtomic } = require('../lib/runtime');
 
 const DEFAULT_INTERVAL_SECONDS = 5;
@@ -29,6 +30,7 @@ const state = {
   plans: readJson(viewFile())?.plans === true,
   selected: 0,
   notice: null,
+  borrowed: null,
   timer: null,
 };
 
@@ -61,6 +63,7 @@ function draw() {
     color: true,
     plans: state.plans,
     selected: state.selected,
+    borrowed: state.borrowed && state.borrowed.paneId,
     stateDir: resolvedStateDir(),
   });
   if (state.notice) lines.push(` ${state.notice}`);
@@ -79,6 +82,11 @@ function refresh() {
   }
   const moved = was ? state.rows.findIndex((row) => row.paneId === was) : -1;
   state.selected = moved >= 0 ? moved : clamp(state.selected);
+  // Одолженный агент мог закрыться, пока стоял рядом: тогда возвращать домой
+  // уже нечего и помнить о нём не нужно.
+  const alive = stillThere(state.borrowed, state.rows);
+  if (Boolean(alive) !== Boolean(state.borrowed)) rememberBorrow(alive);
+  else state.borrowed = alive;
   draw();
 }
 
@@ -96,19 +104,80 @@ function move(delta) {
   draw();
 }
 
-// Оверлей наезжает на активный пейн и закрывается обратно в него, поэтому
-// после перехода ему остаться нечем: он закрывается. Пейн сбоку человек
-// поставил рядом с агентами нарочно — он остаётся открытым, иначе список
-// пришлось бы звать заново после каждого перехода.
-function closesOnEnter() {
-  return process.env.HERDR_PLUGIN_ENTRYPOINT_ID !== 'board-side';
+// Оверлей наезжает на активный пейн и закрывается обратно в него: соседа ему
+// не удержать, поэтому он просто уводит фокус и закрывается. Пейн сбоку живёт
+// в своей вкладке — вот он и показывает агента рядом с собой.
+function isSideBoard() {
+  return process.env.HERDR_PLUGIN_ENTRYPOINT_ID === 'board-side';
 }
 
-// Перейти в сессию выбранного агента — то, зачем список и открывают: увидел,
-// кто спрашивает, вошёл к нему.
+// Своя панель и своя вкладка. Переменные окружения herdr задаёт при запуске, а
+// вкладка могла с тех пор смениться — панель человек волен передвинуть сам, —
+// поэтому перед переездом она спрашивается заново.
+const BOARD_PANE = process.env.HERDR_PANE_ID || null;
+
+function boardTab() {
+  if (BOARD_PANE) {
+    try {
+      const tab = herdr(['pane', 'get', BOARD_PANE])?.result?.pane?.tab_id;
+      if (tab) return tab;
+    } catch {
+      /* fall back to the tab we started in */
+    }
+  }
+  return process.env.HERDR_TAB_ID || null;
+}
+
+function borrowFile() {
+  return path.join(resolvedStateDir(), 'board-borrow.json');
+}
+
+function rememberBorrow(borrowed) {
+  state.borrowed = borrowed;
+  try {
+    writeJsonAtomic(borrowFile(), { borrowed, boardPane: BOARD_PANE });
+  } catch {
+    /* worst case the next board start does not adopt it back */
+  }
+}
+
+// Отправить агента домой — в свою вкладку, под своим названием.
 //
-// Фокус ставится до выхода: закрытие оверлея возвращает фокус туда, откуда
-// его открыли, поэтому порядок здесь решает всё.
+// Дом приходится заводить заново: вкладка агента закрылась сама, когда он из
+// неё уехал (herdr так и сообщает — `closed_tab_id`). Новая вкладка получает
+// номер вместо имени, поэтому название задачи возвращается руками.
+function sendHome(borrowed) {
+  if (!borrowed) return;
+  let tabId = null;
+  try {
+    tabId = herdr(['pane', 'move', borrowed.paneId, '--new-tab'])?.result?.move_result?.pane?.tab_id;
+  } catch {
+    return; // панель закрылась вместе с агентом — возвращать нечего
+  }
+  if (tabId && borrowed.title) {
+    try {
+      herdr(['tab', 'rename', tabId, borrowed.title.slice(0, 40)]);
+    } catch {
+      /* безымянная вкладка — не повод считать переезд неудачным */
+    }
+  }
+}
+
+// Доля ширины, остающаяся списку. Список — колонка с короткими строками,
+// агенту нужно больше.
+function boardRatio() {
+  const configured = Number(process.env.AGENT_TASKS_BOARD_RATIO);
+  return Number.isFinite(configured) && configured > 0.1 && configured < 0.9 ? configured : 0.35;
+}
+
+function bringHere(row, tabId) {
+  const args = ['pane', 'move', row.paneId, '--tab', tabId, '--split', 'right', '--ratio', String(boardRatio())];
+  if (BOARD_PANE) args.push('--target-pane', BOARD_PANE);
+  herdr(args); // переезд сам переводит фокус на переехавшую панель
+}
+
+// Показать выбранного агента — то, зачем список и открывают: увидел, кто
+// спрашивает, посмотрел на него, не теряя списка из виду.
 function enter(index) {
   const at = index === undefined ? state.selected : index;
   const row = state.rows[at];
@@ -116,22 +185,69 @@ function enter(index) {
   // Прыжок по цифре двигает и курсор: вернувшись к списку, человек должен
   // найти его там, где был сам, а не там, где оставил в прошлый раз.
   state.selected = at;
-  // Пейна уже нет — переходить некуда. Молча закрыться тут нельзя: человек
+  // Панели уже нет — показывать нечего. Молча закрыться тут нельзя: человек
   // решит, что промахнулся мимо клавиши.
   if (row.status === 'gone') {
-    state.notice = `${row.title}: пейна больше нет`;
+    state.notice = `${row.title}: панели больше нет`;
     draw();
     return;
   }
+
+  if (!isSideBoard()) {
+    // Оверлей: увести фокус и уйти с дороги.
+    try {
+      herdr(['agent', 'focus', row.paneId]);
+    } catch (error) {
+      state.notice = `не удалось перейти: ${error.message}`;
+      draw();
+      return;
+    }
+    quit();
+    return;
+  }
+
+  const tabId = boardTab();
+  if (!tabId) {
+    state.notice = 'не понять, в какой я вкладке — перехожу фокусом';
+    try {
+      herdr(['agent', 'focus', row.paneId]);
+    } catch { /* сказать уже нечего */ }
+    draw();
+    return;
+  }
+
+  const plan = borrowPlan({ borrowed: state.borrowed, wanted: { paneId: row.paneId, title: row.title } });
   try {
-    herdr(['agent', 'focus', row.paneId]);
+    if (plan.bring) {
+      sendHome(plan.send);
+      bringHere(row, tabId);
+      rememberBorrow({ paneId: row.paneId, title: row.title });
+    } else if (plan.focus) {
+      herdr(['agent', 'focus', plan.focus]);
+    }
   } catch (error) {
-    state.notice = `не удалось перейти: ${error.message}`;
+    state.notice = `не удалось показать: ${error.message}`;
+  }
+  draw();
+}
+
+// Отпустить агента: он уезжает домой, рядом со списком снова пусто.
+function release() {
+  if (!state.borrowed) {
+    state.notice = 'рядом никого нет';
     draw();
     return;
   }
-  if (closesOnEnter()) quit();
-  else draw();
+  sendHome(state.borrowed);
+  rememberBorrow(null);
+  if (BOARD_PANE) {
+    try {
+      herdr(['pane', 'focus', BOARD_PANE]);
+    } catch {
+      /* фокус — мелочь по сравнению с переездом */
+    }
+  }
+  draw();
 }
 
 function togglePlans() {
@@ -146,13 +262,35 @@ function togglePlans() {
 
 function quit(code = 0) {
   clearInterval(state.timer);
+  // Закрываясь, список отдаёт агента обратно: иначе тот останется стоять в
+  // чужой вкладке, где больше ничего нет.
+  if (state.borrowed) {
+    sendHome(state.borrowed);
+    rememberBorrow(null);
+  }
   if (process.stdin.isTTY) process.stdin.setRawMode(false);
   process.stdout.write('\u001b[?25h\u001b[?1049l');
   process.exit(code);
 }
 
+// Доску могли закрыть вместе с herdr, оставив одолженного агента рядом с её
+// местом. Новая доска в той же вкладке признаёт его своим, вместо того чтобы
+// заводить второго соседа.
+function adoptBorrowed() {
+  const saved = readJson(borrowFile())?.borrowed;
+  if (!saved) return;
+  try {
+    const tab = herdr(['pane', 'get', saved.paneId])?.result?.pane?.tab_id;
+    if (tab && tab === boardTab()) state.borrowed = saved;
+    else rememberBorrow(null);
+  } catch {
+    rememberBorrow(null);
+  }
+}
+
 function main() {
   process.stdout.write('\u001b[?1049h\u001b[?25l');
+  if (isSideBoard()) adoptBorrowed();
   refresh();
   state.timer = setInterval(refresh, interval());
 
@@ -172,6 +310,7 @@ function main() {
       else if (key >= '1' && key <= '9') enter(Number(key) - 1);
       else if (key === 'r' || key === 'R') refresh();
       else if (key === 'p' || key === 'P') togglePlans();
+      else if (key === 'o' || key === 'O') release();
       // q, Esc, Ctrl+C, Ctrl+D all close the window.
       else if (key === 'q' || key === 'Q' || key === '\u001b' || key === '\u0003' || key === '\u0004') quit();
       else if (had) draw();

@@ -53,7 +53,7 @@ function bar(done, total, width = 10) {
 // Строка выбранного агента помечается курсором и своим номером: номер — это
 // то, что нажимают, чтобы перейти к нему, поэтому он стоит там же, где глаз
 // ищет агента, а не в подсказке внизу.
-function agentBlock(row, { width, color, plans, selected = false, number = null }) {
+function agentBlock(row, { width, color, plans, selected = false, number = null, here = false }) {
   const lines = [];
   const status = statusOf(row.status);
   const cursor = selected ? paint('▸', 'blue', color) : ' ';
@@ -66,7 +66,10 @@ function agentBlock(row, { width, color, plans, selected = false, number = null 
   ].join(' ');
   lines.push(head);
 
-  const meta = [row.kind, row.model, row.hotkey, status.text].filter(Boolean).join(' · ');
+  // «рядом» — тот, чья панель стоит сейчас у списка. Без этой пометки не
+  // отличить «выбран курсором» от «показан на экране», а это разные вещи.
+  const meta = [row.kind, row.model, row.hotkey, status.text, here ? 'рядом' : null]
+    .filter(Boolean).join(' · ');
   lines.push(`    ${paint(clip(meta, width - 4), 'dim', color)}`);
 
   if (row.total) {
@@ -92,7 +95,24 @@ function agentBlock(row, { width, color, plans, selected = false, number = null 
   return lines;
 }
 
-function renderBoard({ rows = [], width = 80, color = true, plans = false, stateDir = null, selected = 0 } = {}) {
+// Подсказка по клавишам в одну строку: когда рядом со списком стоит агент,
+// колонка узкая, а перенос подсказки на три строки съедает сам список. Не
+// влезло словами — остаются одни клавиши.
+function keyHints(width, hasRows, plans, borrowed) {
+  const full = [
+    hasRows ? '↑↓ выбрать · Enter показать · 1-9 сразу' : null,
+    borrowed ? 'o отпустить' : null,
+    plans ? 'p свернуть план' : 'p показать план',
+    'r обновить',
+    'q закрыть',
+  ].filter(Boolean).join(' · ');
+  if (full.length + 2 <= width) return full;
+  const short = [hasRows ? '↑↓ Enter 1-9' : null, borrowed ? 'o' : null, 'p', 'r', 'q']
+    .filter(Boolean).join(' · ');
+  return short.length + 2 <= width ? short : short.replace(/ · /g, ' ');
+}
+
+function renderBoard({ rows = [], width = 80, color = true, plans = false, stateDir = null, selected = 0, borrowed = null } = {}) {
   const lines = [];
   const title = paint(' Агенты и их задачи ', 'bold', color);
   lines.push(title);
@@ -114,19 +134,14 @@ function renderBoard({ rows = [], width = 80, color = true, plans = false, state
       color,
       plans,
       selected: index === selected,
+      here: Boolean(borrowed) && borrowed === row.paneId,
       number: index < 9 ? index + 1 : null,
     }));
   });
 
   lines.push('');
   lines.push(paint('─'.repeat(Math.max(10, Math.min(width, 100))), 'dim', color));
-  const keys = [
-    rows.length ? '↑↓ выбрать · Enter перейти · 1-9 сразу' : null,
-    plans ? 'p свернуть план' : 'p показать план',
-    'r обновить',
-    'q закрыть',
-  ].filter(Boolean).join(' · ');
-  lines.push(paint(` ${keys}`, 'dim', color));
+  lines.push(paint(` ${keyHints(width, rows.length > 0, plans, borrowed)}`, 'dim', color));
   if (stateDir) lines.push(paint(` задачи: ${clip(stateDir, width - 10)}`, 'grey', color));
   return lines;
 }
