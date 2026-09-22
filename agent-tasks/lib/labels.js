@@ -30,6 +30,47 @@ function tokensFor(entry, plan) {
   };
 }
 
+// Русский счёт: 1 агент, 2 агента, 5 агентов. Сайдбар — не то место, где
+// человеку показывают «3 агент(ов)».
+function plural(count, one, few, many) {
+  const mod100 = count % 100;
+  if (mod100 >= 11 && mod100 <= 14) return many;
+  switch (count % 10) {
+    case 1: return one;
+    case 2:
+    case 3:
+    case 4: return few;
+    default: return many;
+  }
+}
+
+// Кто раздаёт задачи. Сессия, из которой запускали агентов, в сайдбаре ничем
+// не отличалась от них самих — а это она ими и руководит. Токен ставится на
+// её панель и считает только живых: закрытый агент из счёта уходит.
+//
+// `$agents` живёт в той же строке сайдбара, что и `$task`: у оркестратора
+// задачи нет, у агента нет подчинённых, поэтому строка показывает ровно одно
+// и не двоится.
+function crewTokens(entries, agents) {
+  const alive = new Set(agents.map((agent) => agent.pane_id));
+  const counts = new Map();
+  for (const entry of Object.values(entries)) {
+    if (!entry.ownerPaneId || !alive.has(entry.paneId)) continue;
+    counts.set(entry.ownerPaneId, (counts.get(entry.ownerPaneId) || 0) + 1);
+  }
+
+  const tokens = new Map();
+  for (const agent of agents) {
+    const count = counts.get(agent.pane_id) || 0;
+    // Оркестратор, у которого не осталось агентов, перестаёт им быть: токен
+    // снимается, а не показывает ноль.
+    tokens.set(agent.pane_id, {
+      agents: count ? `▶ ${count} ${plural(count, 'агент', 'агента', 'агентов')}` : null,
+    });
+  }
+  return tokens;
+}
+
 // Сравниваем с тем, что herdr уже показывает, и шлём только расхождения:
 // каждый отчёт занимает слот источника (их у пейна 32 за всю жизнь), а события
 // прилетают пачками.
@@ -57,16 +98,26 @@ function diff(wanted, current) {
 // это разные вещи.
 function planUpdates({ entries, agents, plans = {} }) {
   const byPane = new Map(agents.map((agent) => [agent.pane_id, agent]));
-  const updates = [];
+  const wanted = new Map();
   const forget = [];
 
   for (const [paneId, entry] of Object.entries(entries)) {
-    const agent = byPane.get(paneId);
-    if (!agent) {
+    if (!byPane.has(paneId)) {
       forget.push(paneId);
       continue;
     }
-    const patch = diff(tokensFor(entry, plans[paneId]), agent.tokens);
+    wanted.set(paneId, tokensFor(entry, plans[paneId]));
+  }
+
+  // Оркестратор обычно не из реестра — это сессия человека, поэтому его
+  // токены считаются по всем агентам, а не только по запущенным плагином.
+  for (const [paneId, tokens] of crewTokens(entries, agents)) {
+    wanted.set(paneId, { ...(wanted.get(paneId) || {}), ...tokens });
+  }
+
+  const updates = [];
+  for (const [paneId, tokens] of wanted) {
+    const patch = diff(tokens, byPane.get(paneId)?.tokens);
     if (Object.keys(patch).length) updates.push({ paneId, tokens: patch });
   }
 
@@ -77,6 +128,11 @@ function planUpdates({ entries, agents, plans = {} }) {
 function boardRow(entry, agent, plan) {
   return {
     paneId: entry.paneId,
+    // Вкладка нужна, чтобы закрыть агента из списка целиком, а не оставить от
+    // него пустую оболочку. Берётся живая: показ агента под списком увозит его
+    // панель в чужую вкладку и возвращает уже в новую, а та, что записана при
+    // запуске, к этому времени ничья.
+    tabId: agent?.tab_id || entry.tabId || null,
     title: entry.title,
     kind: entry.kind,
     model: entry.model || null,
@@ -91,4 +147,4 @@ function boardRow(entry, agent, plan) {
   };
 }
 
-module.exports = { MAX_TOKEN, clamp, tokensFor, diff, planUpdates, boardRow };
+module.exports = { MAX_TOKEN, clamp, plural, tokensFor, crewTokens, diff, planUpdates, boardRow };

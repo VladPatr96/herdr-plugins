@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { clamp, tokensFor, diff, planUpdates, MAX_TOKEN } = require('../lib/labels');
+const { clamp, tokensFor, diff, planUpdates, crewTokens, plural, boardRow, MAX_TOKEN } = require('../lib/labels');
 const { progress } = require('../lib/plan');
 
 const ENTRY = { paneId: 'w8:pS', title: 'Починить парсер дат', kind: 'claude', model: 'sonnet' };
@@ -69,4 +69,59 @@ test('ничего не изменилось — ни одного отчёта'
   const agents = [{ pane_id: 'w8:pS', agent_status: 'working', tokens: tokensFor(ENTRY, PLAN) }];
   const { updates } = planUpdates({ entries, agents, plans: { 'w8:pS': PLAN } });
   assert.deepStrictEqual(updates, []);
+});
+
+test('счёт агентов по-русски', () => {
+  assert.strictEqual(plural(1, 'агент', 'агента', 'агентов'), 'агент');
+  assert.strictEqual(plural(2, 'агент', 'агента', 'агентов'), 'агента');
+  assert.strictEqual(plural(5, 'агент', 'агента', 'агентов'), 'агентов');
+  assert.strictEqual(plural(11, 'агент', 'агента', 'агентов'), 'агентов', 'одиннадцать — не один');
+  assert.strictEqual(plural(21, 'агент', 'агента', 'агентов'), 'агент');
+  assert.strictEqual(plural(112, 'агент', 'агента', 'агентов'), 'агентов');
+});
+
+test('оркестратор помечен числом своих агентов', () => {
+  const entries = {
+    'w8:p1': { paneId: 'w8:p1', title: 'Раз', ownerPaneId: 'w8:pR' },
+    'w8:p2': { paneId: 'w8:p2', title: 'Два', ownerPaneId: 'w8:pR' },
+  };
+  const agents = [{ pane_id: 'w8:p1' }, { pane_id: 'w8:p2' }, { pane_id: 'w8:pR' }];
+  const tokens = crewTokens(entries, agents);
+  assert.strictEqual(tokens.get('w8:pR').agents, '▶ 2 агента');
+  assert.strictEqual(tokens.get('w8:p1').agents, null, 'у самого агента подчинённых нет');
+});
+
+test('закрытый агент из счёта уходит, а пустой счёт снимает пометку', () => {
+  const entries = {
+    'w8:p1': { paneId: 'w8:p1', title: 'Раз', ownerPaneId: 'w8:pR' },
+    'w8:p2': { paneId: 'w8:p2', title: 'Два', ownerPaneId: 'w8:pR' },
+  };
+  const one = crewTokens(entries, [{ pane_id: 'w8:p1' }, { pane_id: 'w8:pR' }]);
+  assert.strictEqual(one.get('w8:pR').agents, '▶ 1 агент');
+  const none = crewTokens(entries, [{ pane_id: 'w8:pR' }]);
+  assert.strictEqual(none.get('w8:pR').agents, null, 'без агентов он больше не оркестратор');
+});
+
+test('пометка оркестратора приходит отчётом вместе с остальными', () => {
+  const entries = { 'w8:p1': { paneId: 'w8:p1', title: 'Раз', ownerPaneId: 'w8:pR' } };
+  const agents = [
+    { pane_id: 'w8:p1', tokens: {} },
+    { pane_id: 'w8:pR', tokens: { hotkey: 'Alt+7' } },
+  ];
+  const { updates } = planUpdates({ entries, agents });
+  const owner = updates.find((u) => u.paneId === 'w8:pR');
+  assert.deepStrictEqual(owner.tokens, { agents: '▶ 1 агент' }, 'чужой hotkey не трогаем');
+});
+
+test('строка доски несёт вкладку: ею агента и закрывают', () => {
+  const row = boardRow({ ...ENTRY, tabId: 'w8:t7' }, null, PLAN);
+  assert.strictEqual(row.tabId, 'w8:t7');
+  assert.strictEqual(boardRow(ENTRY, null, PLAN).tabId, null, 'нет вкладки — так и сказано');
+});
+
+test('вкладка берётся живая: панель агента могла переехать', () => {
+  // Показ агента под списком увозит его панель в чужую вкладку и возвращает в
+  // новую. Вкладка из реестра к этому времени уже ничья.
+  const row = boardRow({ ...ENTRY, tabId: 'w8:t7' }, { agent_status: 'idle', tab_id: 'w8:t9' }, PLAN);
+  assert.strictEqual(row.tabId, 'w8:t9');
 });

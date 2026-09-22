@@ -41,6 +41,21 @@ title = "Agent Tasks: sync the sidebar"
 contexts = ["workspace", "global"]
 command = ["node", "bin/sync.js"]
 
+# An agent shown under the list does not need a second row in the sidebar.
+# Herdr's own agent view filters the panel by the `$task` token, which only
+# this plugin reports, so every other agent stays where it was.
+[[actions]]
+id = "hide-from-sidebar"
+title = "Agent Tasks: hide these agents from the sidebar"
+contexts = ["workspace", "global"]
+command = ["node", "bin/sidebar.js", "hide"]
+
+[[actions]]
+id = "show-in-sidebar"
+title = "Agent Tasks: show these agents in the sidebar again"
+contexts = ["workspace", "global"]
+command = ["node", "bin/sidebar.js", "show"]
+
 # A Claude Code session cannot find a plugin on its own, so the skill is
 # installed with this plugin's path already in it.
 [[actions]]
@@ -59,6 +74,11 @@ command = ["node", "bin/install-skill.js", "--uninstall"]
 # start. This also drops agents whose pane is gone.
 [[startup]]
 command = ["node", "bin/sync.js"]
+
+# The sidebar filter lives in the server's memory, so a restart loses it. This
+# puts it back when it was asked for, and stays quiet when it was not.
+[[startup]]
+command = ["node", "bin/sidebar.js", "restore"]
 
 # The task and the plan change while the agent works; the status is Herdr's own
 # and arrives here as an event.

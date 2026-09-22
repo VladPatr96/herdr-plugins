@@ -10,7 +10,9 @@ const { progress } = require('../lib/plan');
 const { boardRow } = require('../lib/labels');
 const { renderBoard } = require('../lib/render-board');
 const { borrowPlan, stillThere } = require('../lib/borrow');
-const { herdr, resolvedStateDir, loadRegistry, readTask, readJson, writeJsonAtomic } = require('../lib/runtime');
+const { closePlan } = require('../lib/close');
+const sidebarView = require('../lib/sidebar-view');
+const { herdr, resolvedStateDir, loadRegistry, saveRegistry, readTask, readJson, writeJsonAtomic } = require('../lib/runtime');
 
 const DEFAULT_INTERVAL_SECONDS = 5;
 
@@ -25,11 +27,17 @@ function viewFile() {
   return path.join(resolvedStateDir(), 'board-view.json');
 }
 
+const view = readJson(viewFile()) || {};
+
 const state = {
   rows: [],
-  plans: readJson(viewFile())?.plans === true,
+  plans: view.plans === true,
+  split: view.split === 'right' ? 'right' : null,
+  hidden: sidebarView.hiddenWanted(),
   selected: 0,
   notice: null,
+  // Чьё закрытие ждёт подтверждения. Живёт ровно одно нажатие.
+  confirm: null,
   borrowed: null,
   timer: null,
 };
@@ -57,13 +65,20 @@ function collect() {
 
 function draw() {
   const width = process.stdout.columns || 80;
+  // Высота — не украшение: без неё список длиннее панели уезжает за край
+  // вместе с шапкой, и первых агентов не видно вовсе. Строка сообщения встаёт
+  // под списком, поэтому свою строку он ей отдаёт.
+  const height = (process.stdout.rows || 24) - (state.notice ? 1 : 0);
   const lines = renderBoard({
     rows: state.rows,
     width,
+    height,
     color: true,
     plans: state.plans,
     selected: state.selected,
     borrowed: state.borrowed && state.borrowed.paneId,
+    split: boardSplit(),
+    hidden: state.hidden,
     stateDir: resolvedStateDir(),
   });
   if (state.notice) lines.push(` ${state.notice}`);
@@ -163,15 +178,71 @@ function sendHome(borrowed) {
   }
 }
 
-// Доля ширины, остающаяся списку. Список — колонка с короткими строками,
-// агенту нужно больше.
+// Куда подставлять агента. Вниз — потому что список обычно стоит колонкой
+// сбоку: агент занимает место под ним, в той же колонке, и оба видны разом.
+// Вправо — когда список открыт во всю ширину. Переключается клавишей `d`,
+// переменная среды задаёт лишь то, с чего начать.
+function boardSplit() {
+  if (state.split) return state.split;
+  return process.env.AGENT_TASKS_BOARD_SPLIT === 'right' ? 'right' : 'down';
+}
+
+function rememberView() {
+  try {
+    writeJsonAtomic(viewFile(), { plans: state.plans, split: boardSplit() });
+  } catch {
+    /* a preference not surviving the session is not worth an error */
+  }
+}
+
+// Сменить направление и тут же переложить того, кто стоит рядом: иначе
+// переключатель ничего не делает, пока агента не выберут заново.
+function toggleSplit() {
+  state.split = boardSplit() === 'down' ? 'right' : 'down';
+  rememberView();
+  const shown = state.borrowed;
+  if (shown) {
+    const row = state.rows.find((item) => item.paneId === shown.paneId);
+    const tabId = boardTab();
+    if (row && tabId) {
+      try {
+        sendHome(shown);
+        bringHere(row, tabId);
+        rememberBorrow({ paneId: row.paneId, title: row.title });
+      } catch (error) {
+        state.notice = `не удалось переложить: ${error.message}`;
+      }
+    }
+  }
+  draw();
+}
+
+// Прятать ли этих агентов из панели «Agents». Ходит в сокет herdr, поэтому
+// одна из немногих асинхронных вещей в этом окне.
+function toggleSidebar() {
+  sidebarView
+    .toggle()
+    .then((result) => {
+      state.hidden = result.hidden;
+      state.notice = result.hidden
+        ? 'агенты задач убраны из сайдбара'
+        : 'агенты задач снова в сайдбаре';
+    })
+    .catch((error) => {
+      state.notice = `сайдбар: ${error.message}`;
+    })
+    .then(draw);
+}
+
+// Доля, остающаяся списку. Список — это несколько коротких строк, агенту
+// нужно место.
 function boardRatio() {
   const configured = Number(process.env.AGENT_TASKS_BOARD_RATIO);
   return Number.isFinite(configured) && configured > 0.1 && configured < 0.9 ? configured : 0.35;
 }
 
 function bringHere(row, tabId) {
-  const args = ['pane', 'move', row.paneId, '--tab', tabId, '--split', 'right', '--ratio', String(boardRatio())];
+  const args = ['pane', 'move', row.paneId, '--tab', tabId, '--split', boardSplit(), '--ratio', String(boardRatio())];
   if (BOARD_PANE) args.push('--target-pane', BOARD_PANE);
   herdr(args); // переезд сам переводит фокус на переехавшую панель
 }
@@ -250,13 +321,60 @@ function release() {
   draw();
 }
 
+// Закрыть агента из списка. Закрывается вкладка целиком — сессия агента
+// завершается, — поэтому у живого сначала спрашивают, и только `y` доводит
+// дело до конца. Решение, что именно делать, принимает lib/close.
+function askClose() {
+  const row = state.rows[state.selected];
+  if (!row) return;
+  const plan = closePlan({ row, borrowed: state.borrowed, boardTab: boardTab() });
+  if (plan.confirm) {
+    state.confirm = row.paneId;
+    state.notice = plan.question;
+    draw();
+    return;
+  }
+  applyClose(plan, row);
+}
+
+function applyClose(plan, row) {
+  if (!plan.forget) {
+    draw();
+    return;
+  }
+  try {
+    if (plan.closeTab) herdr(['tab', 'close', plan.closeTab]);
+    else if (plan.closePane) herdr(['pane', 'close', plan.closePane]);
+  } catch (error) {
+    state.notice = `не удалось закрыть: ${error.message}`;
+    draw();
+    return;
+  }
+  // Пометку «стоит рядом» снимаем только после удачного закрытия: сними её
+  // раньше — и после отказа агент останется в чужой вкладке ничейным, и
+  // отправить его домой будет уже некому.
+  if (plan.release) rememberBorrow(null);
+  forget(plan.forget);
+  state.notice = `${row.title}: закрыт`;
+  refresh();
+}
+
+// Из реестра запись уходит сразу, не дожидаясь `sync`: список должен ответить
+// на нажатие, а не через секунду. Файл задачи с планом остаётся на диске.
+function forget(paneId) {
+  const dir = resolvedStateDir();
+  const kept = { ...loadRegistry(dir) };
+  delete kept[paneId];
+  try {
+    saveRegistry(kept, dir);
+  } catch {
+    /* следующий sync подчистит сам */
+  }
+}
+
 function togglePlans() {
   state.plans = !state.plans;
-  try {
-    writeJsonAtomic(viewFile(), { plans: state.plans });
-  } catch {
-    /* a preference not surviving the session is not worth an error */
-  }
+  rememberView();
   draw();
 }
 
@@ -302,6 +420,22 @@ function main() {
       // Сообщение живёт до следующей клавиши: человек его уже прочитал.
       const had = state.notice;
       state.notice = null;
+      // Вопрос о закрытии перехватывает следующее нажатие целиком: `y` —
+      // закрываем, что угодно другое — передумали. Иначе «промахнулся мимо
+      // x» превращается в «закрыл не того».
+      if (state.confirm) {
+        const paneId = state.confirm;
+        state.confirm = null;
+        if (key === 'y' || key === 'Y') {
+          const row = state.rows.find((item) => item.paneId === paneId);
+          if (row) applyClose(closePlan({ row, confirmed: true, borrowed: state.borrowed, boardTab: boardTab() }), row);
+          else draw();
+        } else {
+          state.notice = 'не закрываю';
+          draw();
+        }
+        return;
+      }
       // Стрелка приходит escape-последовательностью, поэтому её разбор идёт
       // раньше голого Esc — иначе «вверх» закрывала бы окно.
       if (key === '\u001b[A' || key === 'k') move(-1);
@@ -311,6 +445,9 @@ function main() {
       else if (key === 'r' || key === 'R') refresh();
       else if (key === 'p' || key === 'P') togglePlans();
       else if (key === 'o' || key === 'O') release();
+      else if (key === 'x' || key === 'X') askClose();
+      else if (key === 'd' || key === 'D') toggleSplit();
+      else if (key === 's' || key === 'S') toggleSidebar();
       // q, Esc, Ctrl+C, Ctrl+D all close the window.
       else if (key === 'q' || key === 'Q' || key === '\u001b' || key === '\u0003' || key === '\u0004') quit();
       else if (had) draw();

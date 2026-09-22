@@ -279,6 +279,10 @@ function launch(args) {
   const entry = {
     paneId,
     tabId,
+    // Кто запустил. Панель вызывающего herdr сообщает в окружении своей
+    // оболочки, а скилл зовут как раз из сессии, которая в ней и живёт. По
+    // этому полю сайдбар потом помечает самого оркестратора.
+    ownerPaneId: process.env.HERDR_PANE_ID || null,
     kind: args.kind,
     model: args.model || null,
     name,
